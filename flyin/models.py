@@ -7,13 +7,24 @@ class Zone:
     """
     Representa una zona individual
     """
-    VALID_TYPES = {"normal", "blocked", "restricted", "priority"}
+    VALID_TYPES: set[str] = {"normal", "blocked", "restricted", "priority"}
 
     def __init__(
             self, name: str, x: int, y: int, zone_type: str = "normal"
                 ) -> None:
+
+        if not isinstance(name, str):
+            raise TypeError("Zone must be an string")
+
+        if not name.strip():
+            raise ValueError("Zone name cannot be empty")
+
+        if not isinstance(x, int) or not isinstance(y, int):
+            raise TypeError("Zone coordinates must be integers")
+
         if zone_type not in self.VALID_TYPES:
             raise ValueError(f"Invalid zone type: {zone_type}")
+
         self.name = name
         self.x = x
         self.y = y
@@ -28,6 +39,12 @@ class Connection:
     Representa una conexión entre dos zonas
     """
     def __init__(self, zone_a: Zone, zone_b: Zone) -> None:
+        if not isinstance(zone_a, Zone) or not isinstance(zone_b, Zone):
+            raise TypeError("Connections must link Zone objects")
+
+        if zone_a == zone_b:
+            raise ValueError("A zone cannot connect to itself")
+
         self.zone_a = zone_a
         self.zone_b = zone_b
 
@@ -53,16 +70,47 @@ class Map:
         self.connections: list[Connection] = []
 
     def add_zone(self, zone: Zone) -> None:
+        """
+        Añade una zona al mapa si no existe otra con el mismo nombre.
+        """
+        if not isinstance(zone, Zone):
+            raise TypeError("Only Zone objects can be added to the map")
+
         if self.get_zone(zone.name) is not None:
-            return
+            raise ValueError(f"Zone already exists: {zone.name}")
+
         self.zones.append(zone)
 
     def add_connection(self, connection: Connection) -> None:
+        """
+        Añade una conexión válida al mapa.
+
+        Comprueba que el objeto sea una Connection,
+        que sus zonas pertenezcan al mapa y que
+        no exista ya la misma conexión,
+        """
+        if not isinstance(connection, Connection):
+            raise TypeError("Only Connections objects can be added to the map")
+
+        if connection.zone_a not in self.zones:
+            raise ValueError(
+                f"Zone not found in map: {connection.zone_a.name}"
+            )
+
+        if connection.zone_b not in self.zones:
+            raise ValueError(
+                f"Zone not found in map: {connection.zone_b.name}"
+            )
+
         for existing_connection in self.connections:
             if existing_connection.connects(
                 connection.zone_a, connection.zone_b
             ):
-                return
+                raise ValueError(
+                    f"Connection already exists: "
+                    f"{connection.zone_a.name}-{connection.zone_b.name}"
+                )
+
         self.connections.append(connection)
 
     def get_zone(self, name: str) -> Zone | None:
@@ -138,10 +186,10 @@ class Simulation:
             self, number_of_drones: int, start_zone: Zone, drone_map: Map
     ) -> None:
         self.drones: list[Drone] = []
-        drone_id = 1
+        drone_id: int = 1
 
         while drone_id <= number_of_drones:
-            drone = Drone(drone_id, start_zone, drone_map)
+            drone: Drone = Drone(drone_id, start_zone, drone_map)
             self.drones.append(drone)
             drone_id += 1
 
@@ -150,16 +198,16 @@ class Simulation:
 
 
 if __name__ == "__main__":
-    start = Zone("start", 0, 0)
-    waypoint1 = Zone("waypoint1", 1, 0)
-    waypoint2 = Zone("waypoint2", 2, 0)
-    goal = Zone("goal", 3, 0)
-    blocked = Zone("blocked1", 4, 0, "blocked")
+    start: Zone = Zone("start", 0, 0)
+    waypoint1: Zone = Zone("waypoint1", 1, 0)
+    waypoint2: Zone = Zone("waypoint2", 2, 0)
+    goal: Zone = Zone("goal", 3, 0)
+    blocked: Zone = Zone("blocked1", 4, 0, "blocked")
     try:
-        blocked2 = Zone("blocked2", 4, 0, "blocked2")
+        blocked2: Zone = Zone("blocked2", 4, 0, "blocked2")
     except ValueError as e:
         print(e)
-    my_map = Map()
+    my_map: Map = Map()
     my_map.add_zone(start)
     my_map.add_zone(waypoint1)
     my_map.add_zone(waypoint2)
@@ -169,9 +217,9 @@ if __name__ == "__main__":
     for zone in my_map.zones:
         print(zone)
 
-    connection = Connection(start, waypoint1)
-    connection2 = Connection(waypoint1, waypoint2)
-    connection3 = Connection(waypoint2, goal)
+    connection: Connection = Connection(start, waypoint1)
+    connection2: Connection = Connection(waypoint1, waypoint2)
+    connection3: Connection = Connection(waypoint2, goal)
     my_map.add_connection(connection)
     my_map.add_connection(connection2)
     my_map.add_connection(connection3)
@@ -188,14 +236,9 @@ if __name__ == "__main__":
     for connections in my_map.get_connections(waypoint2):
         print(connections)
 
-    print("----------------")
-    duplicate_connection = Connection(waypoint1, start)
-    my_map.add_connection(duplicate_connection)
-    print("Number of connection", len(my_map.connections))
-
     print("-------------")
-    drone1 = Drone(1, start, my_map)
-    drone2 = Drone(2, start, my_map)
+    drone1: Drone = Drone(1, start, my_map)
+    drone2: Drone = Drone(2, start, my_map)
     print("Drones")
     print(drone1)
     drone1.move_to(waypoint1)
@@ -221,5 +264,51 @@ if __name__ == "__main__":
 
     print("---------------")
     print("Simulation")
-    simulation = Simulation(3, start, my_map)
+    simulation: Simulation = Simulation(3, start, my_map)
     print(simulation)
+
+    print("----------------")
+    print("Validations zone")
+    try:
+        empty: Zone = Zone(123, 0, 0)
+    except TypeError as e:
+        print(e)
+    try:
+        double: Zone = Zone("double", 2.0, 0)
+    except TypeError as e:
+        print(e)
+    try:
+        spaces: Zone = Zone("    ", 2, 0)
+    except ValueError as e:
+        print(e)
+    try:
+        my_map.add_zone("not a zone")
+    except TypeError as e:
+        print(e)
+    try:
+        my_map.add_zone(start)
+    except ValueError as e:
+        print(e)
+
+    print("------------")
+    print("Validations connections")
+    try:
+        Connection("start", "waypoint1")
+    except TypeError as e:
+        print(e)
+    try:
+        Connection(start, start)
+    except ValueError as e:
+        print(e)
+    try:
+        duplicate_connection: Connection = Connection(waypoint1, start)
+        my_map.add_connection(duplicate_connection)
+    except ValueError as e:
+        print(e)
+    print("Number of connections:", len(my_map.connections))
+    try:
+        external_zone: Zone = Zone("external", 10, 10)
+        invalid_connection: Connection = Connection(goal, external_zone)
+        my_map.add_connection(invalid_connection)
+    except ValueError as e:
+        print(e)

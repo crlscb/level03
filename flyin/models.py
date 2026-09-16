@@ -14,7 +14,7 @@ class Zone:
                 ) -> None:
 
         if not isinstance(name, str):
-            raise TypeError("Zone must be an string")
+            raise TypeError("Zone name must be a string")
 
         if not name.strip():
             raise ValueError("Zone name cannot be empty")
@@ -150,6 +150,23 @@ class Drone:
     def __init__(
             self, drone_id: int, start_zone: Zone, drone_map: Map
                 ) -> None:
+        if not isinstance(drone_id, int):
+            raise TypeError("Drone ID must be an integer")
+
+        if drone_id <= 0:
+            raise ValueError("Drone ID must be positive")
+
+        if not isinstance(start_zone, Zone):
+            raise TypeError("Start zone must be a Zone")
+
+        if not isinstance(drone_map, Map):
+            raise TypeError("Drone map must be a Map")
+
+        if drone_map.get_zone(start_zone.name) is None:
+            raise ValueError(
+                "Start zone does not belong to the drone map"
+            )
+
         self.drone_id = drone_id
         self.current_zone = start_zone
         self.finished = False
@@ -188,6 +205,12 @@ class Drone:
 
         self.current_zone = destination
 
+    def finish(self) -> None:
+        """
+        Marca el dron como terminado.
+        """
+        self.finished = True
+
 
 class Simulation:
     """
@@ -196,6 +219,23 @@ class Simulation:
     def __init__(
             self, number_of_drones: int, start_zone: Zone, drone_map: Map
     ) -> None:
+
+        if number_of_drones <= 0:
+            raise ValueError("Number of drones must be positive")
+
+        if not isinstance(number_of_drones, int):
+            raise TypeError("Number of drones must be an integer")
+
+        if not isinstance(start_zone, Zone):
+            raise TypeError("Start zone must be a Zone")
+
+        if not isinstance(drone_map, Map):
+            raise TypeError("Drone map must be a Map")
+
+        if drone_map.get_zone(start_zone.name) is None:
+            raise ValueError(
+                "Start zone does not belong to the drone map"
+            )
         self.drones: list[Drone] = []
         drone_id: int = 1
 
@@ -214,6 +254,7 @@ if __name__ == "__main__":
     waypoint2: Zone = Zone("waypoint2", 2, 0)
     goal: Zone = Zone("goal", 3, 0)
     blocked: Zone = Zone("blocked1", 4, 0, "blocked")
+    other: Zone = Zone("other", 5, 0)
     try:
         blocked2: Zone = Zone("blocked2", 4, 0, "blocked2")
     except ValueError as e:
@@ -321,5 +362,37 @@ if __name__ == "__main__":
         external_zone: Zone = Zone("external", 10, 10)
         invalid_connection: Connection = Connection(goal, external_zone)
         my_map.add_connection(invalid_connection)
+    except ValueError as e:
+        print(e)
+
+    print("------------")
+    print("move_to() validations:")
+    try:
+        drone1.move_to(waypoint1)
+    except ValueError as e:
+        print(e)
+    try:
+        drone1.move_to(blocked)
+    except ValueError as e:
+        print(e)
+    try:
+        drone1.move_to(other)
+    except ValueError as e:
+        print(e)
+    try:
+        drone1.move_to(goal)
+    except ValueError as e:
+        print(e)
+    try:
+        drone1.move_to("waypoint1")
+    except TypeError as e:
+        print(e)
+
+    print("---------------")
+    print("Finish drone")
+    drone1.finish()
+    print(f"Drone finished: {drone1.finished}")
+    try: 
+        drone1.move_to(waypoint2)
     except ValueError as e:
         print(e)

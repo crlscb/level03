@@ -158,24 +158,35 @@ class Drone:
     def __repr__(self) -> str:
         return f"Drone {self.drone_id} at {self.current_zone.name}"
 
-    def move_to(self, zone: Zone) -> None:
+    def move_to(self, destination: Zone) -> None:
         """
         Mueve el dron a una nueva zona si existe una conexión directa
         y la zona no está bloqueada
         """
+        if self.finished:
+            raise ValueError("Drone has already finished")
+    
+        if not isinstance(destination, Zone):
+            raise TypeError("Destination must be a zone")
 
-        if zone.zone_type == "blocked":
+        if self.drone_map.get_zone(destination.name) is None:
             raise ValueError(
-                f"Cannot move to blocked zone: {zone.name}"
+                "Destination zone does not belong to the drone map"
             )
 
-        if self.drone_map.are_connected(self.current_zone, zone):
-            self.current_zone = zone
-        else:
+        if destination == self.current_zone:
+            raise ValueError("Drone is already in this zone")
+
+        if destination.zone_type == "blocked":
+            raise ValueError("Cannot move to blocked zone")
+
+        if not self.drone_map.are_connected(self.current_zone, destination):
             raise ValueError(
                 f"No connection between "
-                f"{self.current_zone.name} and {zone.name}"
+                f"{self.current_zone.name} and {destination.name}"
             )
+
+        self.current_zone = destination
 
 
 class Simulation:

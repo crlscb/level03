@@ -142,6 +142,67 @@ class Map:
                 return True
         return False
 
+    def contains_zone(self, zone: Zone) -> bool:
+        """
+        Comprueba si una zona pertenece exactamente al mapa.
+        """
+        return zone in self.zones
+
+    def find_route(self, start: Zone, goal: Zone) -> list[Zone]:
+        """
+        Encuentra una ruta entre una zona inicial y una zona de destino
+        Devuelve una lista de zonas que representa el recorrido
+        """
+
+        if not isinstance(start, Zone):
+            raise TypeError("Start must be a Zone")
+
+        if not isinstance(goal, Zone):
+            raise TypeError("Goal must be a Zone")
+
+        if not self.contains_zone(start):
+            raise ValueError("Start zone does not belong to the map")
+
+        if not self.contains_zone(goal):
+            raise ValueError("Goal zone does not belong to the map")
+
+        if start == goal:
+            return start
+
+        pending = [start] # zonas pendientes de explorar
+        visited = {start} # zonas que ya hemos visitado
+        previous: dict[Zone, Zone | None] = {start: None} # recuerda desde que zona llegamos a cada zona
+
+        while pending:
+            current = pending.pop(0)
+
+            for neighbor in self.get_connections(current):
+                if neighbor in visited:
+                    continue
+
+                visited.add(neighbor)
+                previous[neighbor] = current
+
+                if neighbor == goal:
+                    pending.clear()
+                    break
+
+                pending.append(neighbor)
+
+        if goal not in previous:
+            raise ValueError("No route found between start and goal")
+
+        route: list[Zone] = []
+        current: Zone | None = goal
+
+        while current is not None:
+            route.append(current)
+            current = previous[current]
+
+        route.reverse()
+        return route
+
+
 
 class Drone:
     """
@@ -162,7 +223,7 @@ class Drone:
         if not isinstance(drone_map, Map):
             raise TypeError("Drone map must be a Map")
 
-        if drone_map.get_zone(start_zone.name) is None:
+        if not drone_map.contains_zone(start_zone):
             raise ValueError(
                 "Start zone does not belong to the drone map"
             )
@@ -182,11 +243,11 @@ class Drone:
         """
         if self.finished:
             raise ValueError("Drone has already finished")
-    
+
         if not isinstance(destination, Zone):
             raise TypeError("Destination must be a zone")
 
-        if self.drone_map.get_zone(destination.name) is None:
+        if not self.drone_map.contains_zone(destination):
             raise ValueError(
                 "Destination zone does not belong to the drone map"
             )
@@ -220,11 +281,11 @@ class Simulation:
             self, number_of_drones: int, start_zone: Zone, drone_map: Map
     ) -> None:
 
-        if number_of_drones <= 0:
-            raise ValueError("Number of drones must be positive")
-
         if not isinstance(number_of_drones, int):
             raise TypeError("Number of drones must be an integer")
+
+        if number_of_drones <= 0:
+            raise ValueError("Number of drones must be positive")
 
         if not isinstance(start_zone, Zone):
             raise TypeError("Start zone must be a Zone")
@@ -232,7 +293,7 @@ class Simulation:
         if not isinstance(drone_map, Map):
             raise TypeError("Drone map must be a Map")
 
-        if drone_map.get_zone(start_zone.name) is None:
+        if not drone_map.contains_zone(start_zone):
             raise ValueError(
                 "Start zone does not belong to the drone map"
             )
@@ -392,7 +453,12 @@ if __name__ == "__main__":
     print("Finish drone")
     drone1.finish()
     print(f"Drone finished: {drone1.finished}")
-    try: 
+    try:
         drone1.move_to(waypoint2)
+    except ValueError as e:
+        print(e)
+    try:
+        external_zone: Zone = Zone("external", 10, 10)
+        Drone(3, external_zone, my_map)
     except ValueError as e:
         print(e)

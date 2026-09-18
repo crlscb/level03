@@ -60,29 +60,47 @@ class Zone:
 
 class Connection:
     """
-    Representa una conexión entre dos zonas
+    Representa una conexión bidireccional entre dos zonas
     """
-    def __init__(self, zone_a: Zone, zone_b: Zone) -> None:
+    def __init__(
+            self,
+            zone_a: Zone,
+            zone_b: Zone,
+            max_link_capacity: int = 1
+        ) -> None:
+
         if not isinstance(zone_a, Zone) or not isinstance(zone_b, Zone):
             raise TypeError("Connections must link Zone objects")
 
         if zone_a == zone_b:
             raise ValueError("A zone cannot connect to itself")
 
+        if not isinstance(max_link_capacity, int):
+            raise TypeError("Max link capacity must be an integer")
+
+        if max_link_capacity <= 0:
+            raise ValueError("Max link capacity must be positive")
+
         self.zone_a = zone_a
         self.zone_b = zone_b
+        self.max_link_capacity = max_link_capacity
 
     def __repr__(self) -> str:
-        return f"{self.zone_a.name} <-> {self.zone_b.name}"
+        return (
+            f"{self.zone_a.name} <-> {self.zone_b.name} "
+            f"[capacity={self.max_link_capacity}]"
+        )
 
     def connects(self, zone_a: Zone, zone_b: Zone) -> bool:
         """
-        Comprobamos si conecta las mismas zonas que otra conexión
+        Comprobamos si la conexión une las dos zonas,
+        independientemente del orden.
         """
         return (
             (self.zone_a == zone_a and self.zone_b == zone_b) or
             (self.zone_a == zone_b and self.zone_b == zone_a)
         )
+
 
 
 class Map:
@@ -325,7 +343,7 @@ class Drone:
             raise ValueError("Route cannot be empty")
 
         if route[0] != self.current_zone:
-            raise ValueError("Rouse must start at the drone's current zone")
+            raise ValueError("Route must start at the drone's current zone")
 
         for zone in route[1:]:
             self.move_to(zone)
@@ -611,5 +629,27 @@ if __name__ == "__main__":
         Zone("bad", 0, 0, "normal", "blue", "two")
     except TypeError as error:
         print("Error esperado", error)
+
+    print("----Max link capacity-----")
+    high_capacity_connection = Connection(
+        priority_zone,
+        blocked_zone,
+        max_link_capacity=3
+    )
+    print(high_capacity_connection)
+    print(f"Max link capacity: {high_capacity_connection.max_link_capacity}")
+
+    try:
+        Connection(start, waypoint1, max_link_capacity=0)
+    except ValueError as e:
+        print("Error esperado:", e)
+    try:
+        Connection(start, waypoint1, max_link_capacity="three")
+    except TypeError as e:
+        print("Error esperado:", e)
+    try:
+        Connection(start, start)
+    except ValueError as e:
+        print("Error esperado:", e)
 
     

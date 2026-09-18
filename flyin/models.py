@@ -10,8 +10,14 @@ class Zone:
     VALID_TYPES: set[str] = {"normal", "blocked", "restricted", "priority"}
 
     def __init__(
-            self, name: str, x: int, y: int, zone_type: str = "normal"
-                ) -> None:
+            self,
+            name: str,
+            x: int,
+            y: int,
+            zone_type: str = "normal",
+            color: str | None = None,
+            max_drones: int = 1
+            ) -> None:
 
         if not isinstance(name, str):
             raise TypeError("Zone name must be a string")
@@ -22,16 +28,34 @@ class Zone:
         if not isinstance(x, int) or not isinstance(y, int):
             raise TypeError("Zone coordinates must be integers")
 
+        if not isinstance(zone_type, str):
+            raise TypeError("Zone type must be a string")
+
         if zone_type not in self.VALID_TYPES:
             raise ValueError(f"Invalid zone type: {zone_type}")
+
+        if color is not None and not isinstance(color, str):
+            raise TypeError("Color must be a string or None")
+
+        if not isinstance(max_drones, int):
+            raise TypeError("Max drones must be an integer")
+
+        if max_drones <= 0:
+            raise ValueError("Max drones must be positive")
 
         self.name = name
         self.x = x
         self.y = y
         self.zone_type = zone_type
+        self.color = color
+        self.max_drones = max_drones
 
     def __repr__(self) -> str:
-        return f"{self.name} ({self.x}, {self.y}) [{self.zone_type}]"
+        return (
+            f"{self.name}"
+            f"({self.x}), ({self.y}) "
+            f"[{self.zone_type}]"
+        )
 
 
 class Connection:
@@ -142,6 +166,23 @@ class Map:
                 return True
         return False
 
+    def get_neighbors(self, zone: Zone) -> list[Zone]:
+        """
+        Devuelve las zonas conectadas directamente a una zona.
+        """
+        if not isinstance(zone, Zone):
+            raise TypeError("Zone must be a Zone")
+
+        neighbors: list[Zone] = []
+
+        for connection in self.get_connections(zone):
+            if connection.zone_a == zone:
+                neighbors.append(connection.zone_b)
+            else:
+                neighbors.append(connection.zone_a)
+
+        return neighbors
+
     def contains_zone(self, zone: Zone) -> bool:
         """
         Comprueba si una zona pertenece exactamente al mapa.
@@ -167,7 +208,7 @@ class Map:
             raise ValueError("Goal zone does not belong to the map")
 
         if start == goal:
-            return start
+            return [start]
 
         pending = [start] # zonas pendientes de explorar
         visited = {start} # zonas que ya hemos visitado
@@ -176,7 +217,7 @@ class Map:
         while pending:
             current = pending.pop(0)
 
-            for neighbor in self.get_connections(current):
+            for neighbor in self.get_neighbors(current):
                 if neighbor in visited:
                     continue
 
@@ -272,6 +313,24 @@ class Drone:
         """
         self.finished = True
 
+    def follow_route(self, route: list[Zone]) -> None:
+        """
+        Hace que el dron recorra una ruta completa.
+        """
+
+        if not isinstance(route, list):
+            raise TypeError("Route must be a list")
+
+        if not route:
+            raise ValueError("Route cannot be empty")
+
+        if route[0] != self.current_zone:
+            raise ValueError("Rouse must start at the drone's current zone")
+
+        for zone in route[1:]:
+            self.move_to(zone)
+            print(f"Drone {self.drone_id} moved to {zone.name}")
+
 
 class Simulation:
     """
@@ -307,6 +366,20 @@ class Simulation:
 
     def __repr__(self) -> str:
         return "\n".join(str(drone) for drone in self.drones)
+
+    def run_route(self, route: list[Zone]) -> None:
+        """
+        Hace que todos los drones de la simulación sigan una ruta.
+        """
+
+        if not isinstance(route, list):
+            raise TypeError("Route must be a list")
+
+        if not route:
+            raise ValueError("Route cannot be empty")
+
+        for drone in self.drones:
+            drone.follow_route(route)
 
 
 if __name__ == "__main__":
@@ -462,3 +535,81 @@ if __name__ == "__main__":
         Drone(3, external_zone, my_map)
     except ValueError as e:
         print(e)
+
+    print("-------------")
+    print("primeras pruebas find_route()")
+
+    route_map = Map()
+    start: Zone = Zone("start", 0, 0)
+    waypoint1: Zone = Zone("waypoint1", 1, 0)
+    waypoint2: Zone = Zone("waypoint2", 2, 0)
+    goal: Zone = Zone("goal", 3, 0)
+
+    route_map.add_zone(start)
+    route_map.add_zone(waypoint1)
+    route_map.add_zone(waypoint2)
+    route_map.add_zone(goal)
+
+    route_map.add_connection(Connection(start, waypoint1))
+    route_map.add_connection(Connection(waypoint1, waypoint2))
+    route_map.add_connection(Connection(waypoint2, goal))
+
+    try:
+        route_map.add_connection(Connection(start, waypoint1))
+    except ValueError as e:
+        print(e)
+
+    route = route_map.find_route(start, goal)
+    print("Ruta encontrada")
+    print(" -> ".join(zone.name for zone in route))
+
+    simulation = Simulation(1, start, route_map)
+    print("Posición inicial:", simulation)
+    simulation.run_route(route)
+    print("Posición final:", simulation)
+
+    print("\n--- Testing zone metadata ---")
+
+    normal_zone = Zone("normal", 0, 0)
+
+    priority_zone = Zone(
+        "corridorA",
+        4,
+        3,
+        "priority",
+        "green",
+        2,
+    )
+
+    blocked_zone = Zone(
+        "obstacleX",
+        5,
+        5,
+        "blocked",
+        "gray",
+        1,
+    )
+
+    print(normal_zone)
+    print(priority_zone)
+    print(blocked_zone)
+
+    print("Priority color:", priority_zone.color)
+    print("Priority max drones:", priority_zone.max_drones)
+
+    try:
+        Zone("bad", 0, 0, "unknown")
+    except ValueError as error:
+        print("Error esperado:", error)
+
+    try:
+        Zone("bad", 0, 0, "normal", "blue", 0)
+    except ValueError as error:
+        print("Error esperado:", error)
+
+    try:
+        Zone("bad", 0, 0, "normal", "blue", "two")
+    except TypeError as error:
+        print("Error esperado", error)
+
+    

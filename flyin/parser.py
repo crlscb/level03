@@ -1,4 +1,4 @@
-from models import Map, Zone
+from models import Map, Zone, Connection
 
 
 class MapData:
@@ -39,32 +39,29 @@ class MapParser:
         if not clean_lines:
             raise ValueError("Map file is empty")
 
-        data: str
-        zone: Zone
+        first_line: str = clean_lines[0]
+        self.parse_number_of_drones(first_line, map_data)
 
         for line in clean_lines[1:]:
             if line.startswith("start_hub:"):
-                data = line[len("start_hub:"):].strip()
-                zone = self.parse_zone_data(data)
-                map_data.start_zone = zone
-                map_data.drone_map.add_zone(zone)
+                start_data: str = line[len("start_hub:"):].strip()
+                start_zone: Zone = self.parse_zone_data(start_data)
+                map_data.start_zone = start_zone
+                map_data.drone_map.add_zone(start_zone)
             elif line.startswith("end_hub:"):
-                data = line[len("end_hub:"):].strip()
-                zone = self.parse_zone_data(data)
-                map_data.end_zone = zone
-                map_data.drone_map.add_zone(zone)
+                end_data: str = line[len("end_hub:"):].strip()
+                end_zone: Zone = self.parse_zone_data(end_data)
+                map_data.end_zone = end_zone
+                map_data.drone_map.add_zone(end_zone)
             elif line.startswith("hub:"):
-                data = line[len("hub:"):].strip()
-                zone = self.parse_zone_data(data)
-                map_data.drone_map.add_zone(zone)
+                hub_data: str = line[len("hub:"):].strip()
+                hub_zone: Zone = self.parse_zone_data(hub_data)
+                map_data.drone_map.add_zone(hub_zone)
             elif line.startswith("connection:"):
-                # conexión
-                pass
+                connection_data: str = line[len("connection:"):].strip()
+                self.parse_connection_data(connection_data, map_data)
             else:
                 raise ValueError(f"Unknown line: {line}")
-
-        first_line: str = clean_lines[0]
-        self.parse_number_of_drones(first_line, map_data)
 
         print(clean_lines)
 
@@ -104,14 +101,128 @@ class MapParser:
         x: int = int(parts[1])
         y: int = int(parts[2])
 
-        return Zone(name, x, y)
+        zone_type: str = "normal"
+        color: str | None = None
+        max_drones: int = 1
+        metadata: str = " ".join(parts[3:])
+
+        if len(parts) > 3:
+
+            if not metadata.startswith("[") or not metadata.endswith("]"):
+                raise ValueError("Invalid zone metadata")
+
+            metadata = metadata[1:-1]
+
+            for item in metadata.split():
+                if item.startswith("color="):
+                    color = item[6:]
+                elif item.startswith("zone="):
+                    zone_type = item[5:]
+                elif item.startswith("max_drones="):
+                    value: str = item[11:]
+
+                    try:
+                        max_drones = int(value)
+                    except ValueError:
+                        raise ValueError(
+                            "max_drones must be a positive integer"
+                        )
+
+                    if max_drones <= 0:
+                        raise ValueError(
+                            "max_drones must be a positive integer"
+                        )
+
+        return Zone(
+            name,
+            x,
+            y,
+            zone_type=zone_type,
+            color=color,
+            max_drones=max_drones
+        )
+
+    def parse_connection_data(self, data: str, map_data: MapData) -> None:
+        """
+        Extrae los nombres de las zonas y crea una conexión.
+        """
+        parts: list[str] = data.split()
+
+        if len(parts) < 1:
+            raise ValueError("Invalid connection format")
+
+        connection_data: str = parts[0]
+        metadata: str = " ".join(parts[1:])
+        max_link_capacity: int = 1
+
+        zone_parts: list[str] = connection_data.split("-")
+
+        if len(zone_parts) != 2:
+            raise ValueError("Invalid connection format")
+
+        zone_a_name: str = zone_parts[0]
+        zone_b_name: str = zone_parts[1]
+
+        if metadata:
+            if not metadata.startswith("[") or not metadata.endswith("]"):
+                raise ValueError("Invalid connection metadata")
+
+            metadata = metadata[1:-1]
+
+            for item in metadata.split():
+                if item.startswith("max_link_capacity="):
+                    value: str = item[18:]
+
+                    try:
+                        max_link_capacity = int(value)
+                    except ValueError:
+                        raise ValueError(
+                            "max_link_capacity must be a positive integer"
+                        )
+
+                    if max_link_capacity <= 0:
+                        raise ValueError(
+                            "max_link_capacity must be a positive integer"
+                        )
+
+        zone_a: Zone | None = map_data.drone_map.get_zone(zone_a_name)
+        zone_b: Zone | None = map_data.drone_map.get_zone(zone_b_name)
+
+        if zone_a is None or zone_b is None:
+            raise ValueError("Connection references as unknown zone")
+
+        connection: Connection = Connection(
+            zone_a,
+            zone_b,
+            max_link_capacity=max_link_capacity
+        )
+        map_data.drone_map.add_connection(connection)
 
 
 if __name__ == "__main__":
-    parser: MapParser = MapParser("test_map.txt")
-    map_data: MapData = parser.parse()
+    try:
+        parser: MapParser = MapParser("test_map.txt")
+        map_data: MapData = parser.parse()
 
-    print("Number of drones:", map_data.number_of_drones)
-    print("Start zone:", map_data.start_zone)
-    print("End zone:", map_data.end_zone)
-    print("Zones:", map_data.drone_map.zones)
+        print("Number of drones:", map_data.number_of_drones)
+        print("Start zone:", map_data.start_zone)
+        print("End zone:", map_data.end_zone)
+
+        print("\n---- ZONES ----")
+
+        for zone in map_data.drone_map.zones:
+            print("Name:", zone.name)
+            print("X:", zone.x)
+            print("Y:", zone.y)
+            print("Type:", zone.zone_type)
+            print("Color:", zone.color)
+            print("Max drones:", zone.max_drones)
+            print()
+
+        print("---- CONNECTIONS ----")
+
+        for connection in map_data.drone_map.connections:
+            print(connection)
+
+    except ValueError as error:
+        print(f"Error: {error}")

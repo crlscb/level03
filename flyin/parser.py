@@ -44,13 +44,25 @@ class MapParser:
 
         for line in clean_lines[1:]:
             if line.startswith("start_hub:"):
+                if map_data.start_zone is not None:
+                    raise ValueError("Multiple start_hub definitions")
+
                 start_data: str = line[len("start_hub:"):].strip()
-                start_zone: Zone = self.parse_zone_data(start_data)
+                start_zone: Zone = self.parse_zone_data(
+                    start_data,
+                    ignore_max_drones=True
+                )
                 map_data.start_zone = start_zone
                 map_data.drone_map.add_zone(start_zone)
             elif line.startswith("end_hub:"):
+                if map_data.end_zone is not None:
+                    raise ValueError("Multiple end_hub definitions")
+
                 end_data: str = line[len("end_hub:"):].strip()
-                end_zone: Zone = self.parse_zone_data(end_data)
+                end_zone: Zone = self.parse_zone_data(
+                    end_data,
+                    ignore_max_drones=True
+                )
                 map_data.end_zone = end_zone
                 map_data.drone_map.add_zone(end_zone)
             elif line.startswith("hub:"):
@@ -64,6 +76,12 @@ class MapParser:
                 raise ValueError(f"Unknown line: {line}")
 
         print(clean_lines)
+
+        if map_data.start_zone is None:
+            raise ValueError("Missing start_hub")
+
+        if map_data.end_zone is None:
+            raise ValueError("Missing end_hub")
 
         return map_data
 
@@ -88,7 +106,11 @@ class MapParser:
 
         map_data.number_of_drones = number_of_drones
 
-    def parse_zone_data(self, line: str) -> Zone:
+    def parse_zone_data(
+            self,
+            line: str,
+            ignore_max_drones: bool = False
+            ) -> Zone:
         """
         Extrae el nombre y las coordenadas de la zona.
         """
@@ -98,8 +120,15 @@ class MapParser:
             raise ValueError("Invalid zone format")
 
         name: str = parts[0]
-        x: int = int(parts[1])
-        y: int = int(parts[2])
+
+        if "-" in name:
+            raise ValueError('Zone name cannot contain hyphens ("-")')
+
+        try:
+            x: int = int(parts[1])
+            y: int = int(parts[2])
+        except ValueError:
+            raise ValueError("Zone coordinates must be integers")
 
         zone_type: str = "normal"
         color: str | None = None
@@ -116,11 +145,14 @@ class MapParser:
             for item in metadata.split():
                 if item.startswith("color="):
                     color = item[6:]
+
                 elif item.startswith("zone="):
                     zone_type = item[5:]
-                elif item.startswith("max_drones="):
-                    value: str = item[11:]
 
+                elif item.startswith("max_drones="):
+                    if ignore_max_drones:
+                        continue
+                    value: str = item[11:]
                     try:
                         max_drones = int(value)
                     except ValueError:
@@ -132,6 +164,8 @@ class MapParser:
                         raise ValueError(
                             "max_drones must be a positive integer"
                         )
+                else:
+                    raise ValueError(f"Unknown zone metadata: {item}")
 
         return Zone(
             name,
@@ -184,6 +218,11 @@ class MapParser:
                         raise ValueError(
                             "max_link_capacity must be a positive integer"
                         )
+
+                else:
+                    raise ValueError(
+                        f"Unknown connection metadata: {item}"
+                    )
 
         zone_a: Zone | None = map_data.drone_map.get_zone(zone_a_name)
         zone_b: Zone | None = map_data.drone_map.get_zone(zone_b_name)

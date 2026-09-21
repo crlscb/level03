@@ -69,7 +69,7 @@ class Connection:
             zone_a: Zone,
             zone_b: Zone,
             max_link_capacity: int = 1
-        ) -> None:
+    ) -> None:
 
         if not isinstance(zone_a, Zone) or not isinstance(zone_b, Zone):
             raise TypeError("Connections must link Zone objects")
@@ -102,7 +102,6 @@ class Connection:
             (self.zone_a == zone_a and self.zone_b == zone_b) or
             (self.zone_a == zone_b and self.zone_b == zone_a)
         )
-
 
 
 class Map:
@@ -230,7 +229,7 @@ class Map:
         if start == goal:
             return [start]
 
-        distances: dict[Zone, int] = {
+        distances: dict[Zone, float] = {
             zone: float("inf")
             for zone in self.zones
         }
@@ -279,17 +278,15 @@ class Map:
             raise ValueError("No route found between start and goal")
 
         route: list[Zone] = []
+        route_current: Zone | None = goal
 
-        current: Zone | None = goal
-
-        while current is not None:
-            route.append(current)
-            current = previous[current]
+        while route_current is not None:
+            route.append(route_current)
+            route_current = previous[route_current]
 
         route.reverse()
 
         return route
-
 
     def get_movement_cost(self, zone: Zone) -> int:
         """
@@ -322,7 +319,7 @@ class Map:
 
         for zone in route[1:]:
             total_cost += self.get_movement_cost(zone)
-        
+
         return total_cost
 
 
@@ -714,5 +711,3 @@ if __name__ == "__main__":
         Connection(start, start)
     except ValueError as e:
         print("Error esperado:", e)
-
-    

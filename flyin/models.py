@@ -236,6 +236,9 @@ class Map:
             current = pending.pop(0)
 
             for neighbor in self.get_neighbors(current):
+                if neighbor.zone_type == "blocked":
+                    continue
+
                 if neighbor in visited:
                     continue
 

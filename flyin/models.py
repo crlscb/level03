@@ -52,8 +52,8 @@ class Zone:
 
     def __repr__(self) -> str:
         return (
-            f"{self.name}"
-            f"({self.x}), ({self.y}) "
+            f"{self.name} "
+            f"({self.x},{self.y}) "
             f"[{self.zone_type}]"
         )
 

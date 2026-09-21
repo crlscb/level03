@@ -75,8 +75,6 @@ class MapParser:
             else:
                 raise ValueError(f"Unknown line: {line}")
 
-        print(clean_lines)
-
         if map_data.start_zone is None:
             raise ValueError("Missing start_hub")
 
@@ -146,13 +144,24 @@ class MapParser:
                 if item.startswith("color="):
                     color = item[6:]
 
+                    if not color:
+                        raise ValueError("Color cannot be empty")
+
                 elif item.startswith("zone="):
                     zone_type = item[5:]
+
+                    if not zone_type:
+                        raise ValueError("Zone type cannot be empty")
 
                 elif item.startswith("max_drones="):
                     if ignore_max_drones:
                         continue
+
                     value: str = item[11:]
+
+                    if not value:
+                        raise ValueError("Max drones cannot be empty")
+
                     try:
                         max_drones = int(value)
                     except ValueError:
@@ -197,6 +206,11 @@ class MapParser:
         zone_a_name: str = zone_parts[0]
         zone_b_name: str = zone_parts[1]
 
+        if not zone_a_name or not zone_b_name:
+            raise ValueError(
+                "Connection zone names cannot be empty"
+            )
+
         if metadata:
             if not metadata.startswith("[") or not metadata.endswith("]"):
                 raise ValueError("Invalid connection metadata")
@@ -227,8 +241,17 @@ class MapParser:
         zone_a: Zone | None = map_data.drone_map.get_zone(zone_a_name)
         zone_b: Zone | None = map_data.drone_map.get_zone(zone_b_name)
 
-        if zone_a is None or zone_b is None:
-            raise ValueError("Connection references as unknown zone")
+        if zone_a is None:
+            raise ValueError(
+                f"Connection '{zone_a_name}-{zone_b_name}' "
+                f"references as unknown zone: {zone_a_name}"
+            )
+
+        if zone_b is None:
+            raise ValueError(
+                f"Connection '{zone_a_name}-{zone_b_name}' "
+                f"references unknown zone: {zone_b_name}"
+            )
 
         connection: Connection = Connection(
             zone_a,

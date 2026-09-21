@@ -17,6 +17,20 @@ def main() -> None:
     for connection in map_data.drone_map.connections:
         print(f"   {connection}")
 
+    print("\nRoute:")
+    try:
+        route = map_data.drone_map.find_route(
+            map_data.start_zone,
+            map_data.end_zone
+        )
+
+        print(" -> ".join(zone.name for zone in route))
+
+        movements_cost = map_data.drone_map.get_route_cost(route)
+        print(f"Movement cost total: {movements_cost} turn(s)")
+    except ValueError as e:
+        print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     main()

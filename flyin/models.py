@@ -1,3 +1,5 @@
+import heapq
+
 """
 El mapa está formado por diferentes zonas por las que pueden pasar drones
 """
@@ -228,33 +230,56 @@ class Map:
         if start == goal:
             return [start]
 
-        pending = [start] # zonas pendientes de explorar
-        visited = {start} # zonas que ya hemos visitado
-        previous: dict[Zone, Zone | None] = {start: None} # recuerda desde que zona llegamos a cada zona
+        distances: dict[Zone, int] = {
+            zone: float("inf")
+            for zone in self.zones
+        }
+
+        distances[start] = 0
+
+        previous: dict[Zone, Zone | None] = {
+            start: None
+        }
+
+        pending: list[tuple[int, int, Zone]] = []
+
+        counter = 0
+
+        heapq.heappush(pending, (0, counter, start))
 
         while pending:
-            current = pending.pop(0)
+            current_cost, _, current = heapq.heappop(pending)
+
+            if current == goal:
+                break
+
+            if current_cost > distances[current]:
+                continue
 
             for neighbor in self.get_neighbors(current):
                 if neighbor.zone_type == "blocked":
                     continue
 
-                if neighbor in visited:
-                    continue
+                movement_cost = self.get_movement_cost(neighbor)
 
-                visited.add(neighbor)
-                previous[neighbor] = current
+                new_cost = current_cost + movement_cost
 
-                if neighbor == goal:
-                    pending.clear()
-                    break
+                if new_cost < distances[neighbor]:
+                    distances[neighbor] = new_cost
+                    previous[neighbor] = current
 
-                pending.append(neighbor)
+                    counter += 1
 
-        if goal not in previous:
+                    heapq.heappush(
+                        pending,
+                        (new_cost, counter, neighbor)
+                    )
+
+        if distances[goal] == float("inf"):
             raise ValueError("No route found between start and goal")
 
         route: list[Zone] = []
+
         current: Zone | None = goal
 
         while current is not None:
@@ -262,8 +287,43 @@ class Map:
             current = previous[current]
 
         route.reverse()
+
         return route
 
+
+    def get_movement_cost(self, zone: Zone) -> int:
+        """
+        Devuelve el coste de movimiento hacia una zona.
+        """
+
+        if not isinstance(zone, Zone):
+            raise TypeError("Zone must be a Zone")
+
+        if zone.zone_type == "blocked":
+            raise ValueError("Cannot enter a blocked zone")
+
+        if zone.zone_type == "restricted":
+            return 2
+
+        return 1
+
+    def get_route_cost(self, route: list[Zone]) -> int:
+        """
+        Calcula el coste total de una ruta.
+        """
+
+        if not isinstance(route, list):
+            raise TypeError("Route must be a list")
+
+        if not route:
+            raise ValueError("Route cannot be empty")
+
+        total_cost: int = 0
+
+        for zone in route[1:]:
+            total_cost += self.get_movement_cost(zone)
+        
+        return total_cost
 
 
 class Drone:

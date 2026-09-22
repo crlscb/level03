@@ -26,6 +26,22 @@ def main() -> None:
 
         print(" -> ".join(zone.name for zone in route))
 
+        if route[0] == map_data.start_zone:
+            print("The route starts correctly")
+        else:
+            print("ERROR: The route does not start correctly")
+
+        if route[-1] == map_data.end_zone:
+            print("The route ends correctly")
+        else:
+            print("The route does not end correctly")
+
+        print("\nMovement cost:")
+
+        for zone in route[1:]:
+            cost = map_data.drone_map.get_movement_cost(zone)
+            print(f"{zone.name}: {cost} turn(s)")
+
         movements_cost = map_data.drone_map.get_route_cost(route)
         print(f"Movement cost total: {movements_cost} turn(s)")
     except ValueError as e:

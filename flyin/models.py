@@ -328,8 +328,11 @@ class Drone:
     Representa un dron que se desplaza por el mapa
     """
     def __init__(
-            self, drone_id: int, start_zone: Zone, drone_map: Map
-                ) -> None:
+            self,
+            drone_id: int,
+            start_zone: Zone,
+            drone_map: Map
+            ) -> None:
         if not isinstance(drone_id, int):
             raise TypeError("Drone ID must be an integer")
 
@@ -349,6 +352,7 @@ class Drone:
 
         self.drone_id = drone_id
         self.current_zone = start_zone
+        self.route_position = 0
         self.finished = False
         self.drone_map = drone_map
 
@@ -409,6 +413,33 @@ class Drone:
             self.move_to(zone)
             print(f"Drone {self.drone_id} moved to {zone.name}")
 
+    def move_one_step(self, destination: Zone) -> None:
+        """
+        Mueve el dron una sola zona.
+        """
+        self.move_to(destination)
+        self.route_position += 1
+        print(f"Drone {self.drone_id} moved to {destination.name}")
+
+    def get_next_zone(self, route: list[Zone]) -> Zone | None:
+        """
+        Devuelve la siguiente zona de la ruta a la que nos moveremos.
+        """
+        if self.route_position + 1 >= len(route):
+            return None
+        return route[self.route_position + 1]
+
+    def move_next(self, route: list[Zone]) -> None:
+        """
+        Mueve el drona a la siguiente zona de la ruta
+        """
+        next_zone = self.get_next_zone(route)
+
+        if next_zone is None:
+            print(f"Drone {self.drone_id} has reached the end of the route")
+            return
+        self.move_one_step(next_zone)
+
 
 class Simulation:
     """
@@ -458,6 +489,21 @@ class Simulation:
 
         for drone in self.drones:
             drone.follow_route(route)
+
+    def run_turn(self, route: list[Zone]) -> None:
+        """
+        Hace avanzar un paso a todos los drones(por turnos).
+        """
+        for drone in self.drones:
+            drone.move_next(route)
+
+    def run_simulation(self, route: list[Zone]) -> None:
+        """
+        Ejecuta la simulación hasta completar la ruta.
+        """
+        for turn in range(len(route) - 1):
+            print(f"\n--- Turn {turn + 1} ---")
+            self.run_turn(route)
 
 
 if __name__ == "__main__":
@@ -641,10 +687,14 @@ if __name__ == "__main__":
     print("Ruta encontrada")
     print(" -> ".join(zone.name for zone in route))
 
-    simulation = Simulation(1, start, route_map)
-    print("Posición inicial:", simulation)
-    simulation.run_route(route)
-    print("Posición final:", simulation)
+    simulation = Simulation(3, start, route_map)
+    print("Posiciones iniciales:")
+    for drone in simulation.drones:
+        print(drone.drone_id, drone.current_zone.name)
+    simulation.run_simulation(route)
+    print("Posiciones finales:")
+    for drone in simulation.drones:
+        print(drone.drone_id, drone.current_zone.name)
 
     print("\n--- Testing zone metadata ---")
 

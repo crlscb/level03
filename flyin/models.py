@@ -495,22 +495,77 @@ class Simulation:
         Hace avanzar un paso a todos los drones(por turnos).
         """
         for drone in self.drones:
-            drone.move_next(route)
+            if drone.finished:
+                continue
+
+            next_zone = drone.get_next_zone(route)
+
+            if next_zone is None:
+                drone.finish()
+                print(
+                    f"Drone {drone.drone_id} "
+                    "has reached the end of the route"
+                )
+                continue
+
+            if self.can_enter_zone(next_zone):
+                drone.move_one_step(next_zone)
+            else:
+                print(
+                    f"Drone {drone.drone_id} "
+                    f"cannot enter {next_zone.name}: zone is full"
+                )
 
     def run_simulation(self, route: list[Zone]) -> None:
         """
         Ejecuta la simulación hasta completar la ruta.
         """
-        for turn in range(len(route) - 1):
-            print(f"\n--- Turn {turn + 1} ---")
+        turn = 0
+
+        while not self.all_drones_finished():
+            turn += 1
+            print(f"\n--- Turn {turn} ---")
             self.run_turn(route)
+
+    def count_drones_in_zone(self, zone: Zone) -> int:
+        """
+        Calcula cuantos drones están actualmente en una zona.
+        """
+        if not isinstance(zone, Zone):
+            raise TypeError("Zone must be a Zone")
+        count = 0
+
+        for drone in self.drones:
+            if drone.current_zone == zone:
+                count += 1
+        return count
+
+    def can_enter_zone(self, zone: Zone) -> bool:
+        """
+        Devuleve true si puede entrar otro dron a esa zona.
+        """
+        if not isinstance(zone, Zone):
+            raise ValueError("Zone must be a Zone")
+
+        count_drones = self.count_drones_in_zone(zone)
+
+        if count_drones < zone.max_drones:
+            return True
+
+        return False
+
+    def all_drones_finished(self) -> bool:
+        """
+        Comprueba si todos los drones han terminado (finished = True)
+        """
+        return all(drone.finished for drone in self.drones)
 
 
 if __name__ == "__main__":
     start: Zone = Zone("start", 0, 0)
     waypoint1: Zone = Zone("waypoint1", 1, 0)
     waypoint2: Zone = Zone("waypoint2", 2, 0)
-    goal: Zone = Zone("goal", 3, 0)
+    goal: Zone = Zone("goal", 3, 0, max_drones=3)
     blocked: Zone = Zone("blocked1", 4, 0, "blocked")
     other: Zone = Zone("other", 5, 0)
     try:
@@ -667,7 +722,7 @@ if __name__ == "__main__":
     start: Zone = Zone("start", 0, 0)
     waypoint1: Zone = Zone("waypoint1", 1, 0)
     waypoint2: Zone = Zone("waypoint2", 2, 0)
-    goal: Zone = Zone("goal", 3, 0)
+    goal: Zone = Zone("goal", 3, 0, max_drones=3)
 
     route_map.add_zone(start)
     route_map.add_zone(waypoint1)
@@ -688,13 +743,24 @@ if __name__ == "__main__":
     print(" -> ".join(zone.name for zone in route))
 
     simulation = Simulation(3, start, route_map)
+    waypoint1.max_drones = 1
     print("Posiciones iniciales:")
     for drone in simulation.drones:
         print(drone.drone_id, drone.current_zone.name)
     simulation.run_simulation(route)
+    count_drones = simulation.count_drones_in_zone(goal)
     print("Posiciones finales:")
     for drone in simulation.drones:
         print(drone.drone_id, drone.current_zone.name)
+    for drone in simulation.drones:
+        print(
+            f"Drone {drone.drone_id} :"
+            f"finished = {drone.finished}"
+        )
+    print(
+        "Are drones finished?",
+        simulation.all_drones_finished()
+    )
 
     print("\n--- Testing zone metadata ---")
 

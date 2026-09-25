@@ -185,6 +185,20 @@ class Map:
                 return True
         return False
 
+    def get_connection(
+            self,
+            zone_a: Zone,
+            zone_b: Zone,
+    ) -> Connection | None:
+        """
+        Devuelve la conexión entre dos zonas, si existe.
+        """
+        for connection in self.connections:
+            if connection.connects(zone_a, zone_b):
+                return connection
+
+        return None
+
     def get_neighbors(self, zone: Zone) -> list[Zone]:
         """
         Devuelve las zonas conectadas directamente a una zona.
@@ -465,6 +479,7 @@ class Simulation:
             raise ValueError(
                 "Start zone does not belong to the drone map"
             )
+        self.map = drone_map
         self.drones: list[Drone] = []
         drone_id: int = 1
 
@@ -509,7 +524,16 @@ class Simulation:
                 continue
 
             if self.can_enter_zone(next_zone):
-                drone.move_one_step(next_zone)
+                if self.can_use_connection(
+                    drone.current_zone,
+                    next_zone
+                ):
+                    drone.move_one_step(next_zone)
+                else:
+                    print(
+                        f"Drone {drone.drone_id} "
+                        f"cannot use connection to {next_zone.name}"
+                    )
             else:
                 print(
                     f"Drone {drone.drone_id} "
@@ -559,6 +583,22 @@ class Simulation:
         Comprueba si todos los drones han terminado (finished = True)
         """
         return all(drone.finished for drone in self.drones)
+
+    def can_use_connection(
+            self,
+            zone_a: Zone,
+            zone_b: Zone,
+    ) -> bool:
+        """
+        Comprueba si existe una conexión entre dos zonas y si tiene
+        capacidad disponible [max_link_capacity]
+        """
+        connection = self.map.get_connection(zone_a, zone_b)
+
+        if connection is None:
+            return False
+
+        return True
 
 
 if __name__ == "__main__":

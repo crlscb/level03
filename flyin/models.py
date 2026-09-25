@@ -509,6 +509,9 @@ class Simulation:
         """
         Hace avanzar un paso a todos los drones(por turnos).
         """
+
+        connections_in_use: dict[Connection, int] = {}
+
         for drone in self.drones:
             if drone.finished:
                 continue
@@ -526,13 +529,25 @@ class Simulation:
             if self.can_enter_zone(next_zone):
                 if self.can_use_connection(
                     drone.current_zone,
-                    next_zone
+                    next_zone,
+                    connections_in_use
                 ):
+                    connection = self.map.get_connection(
+                        drone.current_zone,
+                        next_zone
+                    )
+
                     drone.move_one_step(next_zone)
+
+                    if connection is not None:
+                        connections_in_use[connection] = (
+                            connections_in_use.get(connection, 0) + 1
+                        )
                 else:
                     print(
                         f"Drone {drone.drone_id} "
-                        f"cannot use connection to {next_zone.name}"
+                        f"cannot use connection to {next_zone.name}: "
+                        "connection is full"
                     )
             else:
                 print(
@@ -588,6 +603,7 @@ class Simulation:
             self,
             zone_a: Zone,
             zone_b: Zone,
+            connections_in_use: dict[Connection, int]
     ) -> bool:
         """
         Comprueba si existe una conexión entre dos zonas y si tiene
@@ -598,7 +614,9 @@ class Simulation:
         if connection is None:
             return False
 
-        return True
+        current_usage = connections_in_use.get(connection, 0)
+
+        return current_usage < connection.max_link_capacity
 
 
 if __name__ == "__main__":
@@ -759,9 +777,9 @@ if __name__ == "__main__":
     print("primeras pruebas find_route()")
 
     route_map = Map()
-    start: Zone = Zone("start", 0, 0)
-    waypoint1: Zone = Zone("waypoint1", 1, 0)
-    waypoint2: Zone = Zone("waypoint2", 2, 0)
+    start: Zone = Zone("start", 0, 0, max_drones=3)
+    waypoint1: Zone = Zone("waypoint1", 1, 0, max_drones=3)
+    waypoint2: Zone = Zone("waypoint2", 2, 0, max_drones=3)
     goal: Zone = Zone("goal", 3, 0, max_drones=3)
 
     route_map.add_zone(start)
@@ -769,9 +787,9 @@ if __name__ == "__main__":
     route_map.add_zone(waypoint2)
     route_map.add_zone(goal)
 
-    route_map.add_connection(Connection(start, waypoint1))
-    route_map.add_connection(Connection(waypoint1, waypoint2))
-    route_map.add_connection(Connection(waypoint2, goal))
+    route_map.add_connection(Connection(start, waypoint1, max_link_capacity=3))
+    route_map.add_connection(Connection(waypoint1, waypoint2, max_link_capacity=1))
+    route_map.add_connection(Connection(waypoint2, goal, max_link_capacity=3))
 
     try:
         route_map.add_connection(Connection(start, waypoint1))
@@ -783,7 +801,6 @@ if __name__ == "__main__":
     print(" -> ".join(zone.name for zone in route))
 
     simulation = Simulation(3, start, route_map)
-    waypoint1.max_drones = 1
     print("Posiciones iniciales:")
     for drone in simulation.drones:
         print(drone.drone_id, drone.current_zone.name)

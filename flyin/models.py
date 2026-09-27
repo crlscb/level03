@@ -254,6 +254,11 @@ class Map:
             start: None
         }
 
+        has_priority: dict[Zone, bool] = {
+            zone: False
+            for zone in self.zones
+        }
+
         pending: list[tuple[int, int, Zone]] = []
 
         counter = 0
@@ -264,7 +269,7 @@ class Map:
             current_cost, _, current = heapq.heappop(pending)
 
             if current == goal:
-                break
+                continue
 
             if current_cost > distances[current]:
                 continue
@@ -277,9 +282,22 @@ class Map:
 
                 new_cost = current_cost + movement_cost
 
-                if new_cost < distances[neighbor]:
+                new_has_priority = (
+                    has_priority[current]
+                    or neighbor.zone_type == "priority"
+                )
+
+                if (
+                    new_cost < distances[neighbor]
+                    or (
+                        new_cost == distances[neighbor]
+                        and new_has_priority
+                        and not has_priority[neighbor]
+                    )
+                ):
                     distances[neighbor] = new_cost
                     previous[neighbor] = current
+                    has_priority[neighbor] = new_has_priority
 
                     counter += 1
 
@@ -781,15 +799,34 @@ if __name__ == "__main__":
     waypoint1: Zone = Zone("waypoint1", 1, 0, max_drones=3)
     waypoint2: Zone = Zone("waypoint2", 2, 0, max_drones=3)
     goal: Zone = Zone("goal", 3, 0, max_drones=3)
+    blocked: Zone = Zone("blocked", 1, 1, "blocked")
+    detour: Zone = Zone("detour", 2, 1)
+    restricted: Zone = Zone("restricted", 1, 1, "restricted")
+    normal: Zone = Zone("normal", 2, 2)
+    priority: Zone = Zone("priority", 2, 2, "priority")
 
     route_map.add_zone(start)
     route_map.add_zone(waypoint1)
     route_map.add_zone(waypoint2)
     route_map.add_zone(goal)
+    route_map.add_zone(blocked)
+    route_map.add_zone(detour)
+    route_map.add_zone(restricted)
+    route_map.add_zone(normal)
+    route_map.add_zone(priority)
 
-    route_map.add_connection(Connection(start, waypoint1, max_link_capacity=3))
-    route_map.add_connection(Connection(waypoint1, waypoint2, max_link_capacity=1))
-    route_map.add_connection(Connection(waypoint2, goal, max_link_capacity=3))
+    # route_map.add_connection(Connection(start, waypoint1, max_link_capacity=3))
+    # route_map.add_connection(Connection(waypoint1, waypoint2, max_link_capacity=1))
+    # route_map.add_connection(Connection(waypoint2, goal, max_link_capacity=3))
+
+    route_map.add_connection(Connection(start, waypoint1))
+    route_map.add_connection(Connection(waypoint1, priority))
+    route_map.add_connection(Connection(priority, goal))
+
+    route_map.add_connection(Connection(start, normal))
+    route_map.add_connection(Connection(normal, waypoint2))
+    route_map.add_connection(Connection(waypoint2, goal))
+
 
     try:
         route_map.add_connection(Connection(start, waypoint1))

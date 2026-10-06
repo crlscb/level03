@@ -530,6 +530,8 @@ class Simulation:
 
         connections_in_use: dict[Connection, int] = {}
 
+        planned_moves: list[tuple[Drone, Zone]] = []
+
         for drone in self.drones:
             if drone.finished:
                 continue
@@ -544,30 +546,85 @@ class Simulation:
                 )
                 continue
 
-            if self.can_enter_zone(next_zone):
-                if self.can_use_connection(
-                    drone.current_zone,
-                    next_zone,
-                    connections_in_use
-                ):
-                    connection = self.map.get_connection(
-                        drone.current_zone,
-                        next_zone
-                    )
+            planned_moves.append((drone, next_zone))
 
-                    drone.move_one_step(next_zone)
+        planned_entries: dict[Zone, int] = {}
 
-                    if connection is not None:
-                        connections_in_use[connection] = (
-                            connections_in_use.get(connection, 0) + 1
-                        )
-                else:
-                    print(
-                        f"Drone {drone.drone_id} "
-                        f"cannot use connection to {next_zone.name}: "
-                        "connection is full"
-                    )
-            else:
+        for drone, next_zone in planned_moves:
+            planned_entries[next_zone] = (
+                planned_entries.get(next_zone, 0) + 1
+            )
+
+        planned_exits: dict[Zone, int] = {}
+
+        for drone, next_zone in planned_moves:
+            current_zone = drone.current_zone
+
+            planned_exits[current_zone] = (
+                planned_exits.get(current_zone, 0) + 1
+            )
+
+        for drone, next_zone in planned_moves:
+            current_zone = drone.current_zone
+
+            current_count = self.count_drones_in_zone(next_zone)
+            leaving_count = planned_exits.get(next_zone, 0)
+
+            available_space = (
+                next_zone.max_drones - current_count + leaving_count
+            )
+
+            if available_space <= 0:
+                print(
+                    f"Drone {drone.drone_id} "
+                    f"cannot enter {next_zone.name}: zone is full"
+                )
+                continue
+
+            if not self.can_use_connection(
+                current_zone,
+                next_zone,
+                connections_in_use
+            ):
+                print(
+                    f"Drone {drone.drone_id} "
+                    f"cannot use connection to {next_zone.name}: "
+                    "connection is full"
+                )
+                continue
+
+            connection = self.map.get_connection(current_zone, next_zone)
+            drone.move_one_step(next_zone)
+
+            if connection is not None:
+                connections_in_use[connection] = (
+                    connections_in_use.get(connection, 0) + 1
+                )
+
+            # if self.can_enter_zone(next_zone):
+            #     if self.can_use_connection(
+            #         drone.current_zone,
+            #         next_zone,
+            #         connections_in_use
+            #     ):
+            #         connection = self.map.get_connection(
+            #             drone.current_zone,
+            #             next_zone
+            #         )
+
+            #         drone.move_one_step(next_zone)
+
+            #         if connection is not None:
+            #             connections_in_use[connection] = (
+            #                 connections_in_use.get(connection, 0) + 1
+            #             )
+            #     else:
+            #         print(
+            #             f"Drone {drone.drone_id} "
+            #             f"cannot use connection to {next_zone.name}: "
+            #             "connection is full"
+            #         )
+            # else:
                 print(
                     f"Drone {drone.drone_id} "
                     f"cannot enter {next_zone.name}: zone is full"
@@ -921,3 +978,44 @@ if __name__ == "__main__":
         Connection(start, start)
     except ValueError as e:
         print("Error esperado:", e)
+
+    print("\n========== PRUEBA SIMULTÁNEA ==========")
+
+    zone_a = Zone("A", 0, 0, max_drones=1)
+    zone_b = Zone("B", 1, 0, max_drones=1)
+    zone_c = Zone("C", 2, 0, max_drones=1)
+
+    test_map = Map()
+
+    test_map.add_zone(zone_a)
+    test_map.add_zone(zone_b)
+    test_map.add_zone(zone_c)
+
+    test_map.add_connection(Connection(zone_a, zone_b))
+    test_map.add_connection(Connection(zone_b, zone_c))
+
+    test_route_d1 = [zone_a, zone_b]
+    test_route_d2 = [zone_c, zone_b]
+
+    drone1 = Drone(1, zone_a, test_map)
+    drone2 = Drone(2, zone_c, test_map)
+
+    drone1.route_position = 0
+    drone2.route_position = 0
+
+    simulation = Simulation(1, zone_a, test_map)
+    simulation.drones = [drone1, drone2]
+
+    print("ANTES:")
+    print("D1:", drone1.current_zone.name)
+    print("D2:", drone2.current_zone.name)
+
+    print("SIGUIENTES:")
+    print("D1:", drone1.get_next_zone(test_route_d1).name)
+    print("D2:", drone2.get_next_zone(test_route_d2).name)
+
+    simulation.run_turn(test_route_d1)
+
+    print("DESPUÉS:")
+    print("D1:", drone1.current_zone.name)
+    print("D2:", drone2.current_zone.name)

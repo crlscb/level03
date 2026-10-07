@@ -18,7 +18,7 @@ class Zone:
             y: int,
             zone_type: str = "normal",
             color: str | None = None,
-            max_drones: int = 1
+            max_drones: int | None = 1
             ) -> None:
 
         if not isinstance(name, str):
@@ -39,11 +39,11 @@ class Zone:
         if color is not None and not isinstance(color, str):
             raise TypeError("Color must be a string or None")
 
-        if not isinstance(max_drones, int):
-            raise TypeError("Max drones must be an integer")
-
-        if max_drones <= 0:
-            raise ValueError("Max drones must be positive")
+        if max_drones is not None:
+            if not isinstance(max_drones, int):
+                raise TypeError("Max drones must be an integer")
+            if max_drones <= 0:
+                raise ValueError("Max drones must be positive")
 
         self.name = name
         self.x = x
@@ -385,8 +385,13 @@ class Drone:
         self.drone_id = drone_id
         self.current_zone = start_zone
         self.route_position = 0
+        self.route: list[Zone] = []
         self.finished = False
         self.drone_map = drone_map
+        self.in_transit = False
+        self.transit_destination: Zone | None = None
+        self.transit_connection: Connection | None = None
+        self.transit_turns_remaining = 0
 
     def __repr__(self) -> str:
         return f"Drone {self.drone_id} at {self.current_zone.name}"
@@ -441,9 +446,17 @@ class Drone:
         if route[0] != self.current_zone:
             raise ValueError("Route must start at the drone's current zone")
 
-        for zone in route[1:]:
-            self.move_to(zone)
-            print(f"Drone {self.drone_id} moved to {zone.name}")
+        self.route = route
+        self.route_position = 0
+
+    def start_transit(self, destination: Zone, connection: Connection) -> None:
+        """
+        Inicia un desplazamiento que tarda más de un turno.
+        """
+        self.in_transit = True
+        self.transit_destination = destination
+        self.transit_connection = connection
+        self.transit_turns_remaining = 1
 
     def move_one_step(self, destination: Zone) -> None:
         """
@@ -453,22 +466,22 @@ class Drone:
         self.route_position += 1
         print(f"Drone {self.drone_id} moved to {destination.name}")
 
-    def get_next_zone(self, route: list[Zone]) -> Zone | None:
+    def get_next_zone(self) -> Zone | None:
         """
         Devuelve la siguiente zona de la ruta a la que nos moveremos.
         """
-        if self.route_position + 1 >= len(route):
+        if self.route_position + 1 >= len(self.route):
             return None
-        return route[self.route_position + 1]
+        return self.route[self.route_position + 1]
 
-    def move_next(self, route: list[Zone]) -> None:
+    def move_next(self) -> None:
         """
         Mueve el drona a la siguiente zona de la ruta
         """
-        next_zone = self.get_next_zone(route)
+        next_zone = self.get_next_zone()
 
         if next_zone is None:
-            print(f"Drone {self.drone_id} has reached the end of the route")
+            self.finish()
             return
         self.move_one_step(next_zone)
 
@@ -499,6 +512,7 @@ class Simulation:
             )
         self.map = drone_map
         self.drones: list[Drone] = []
+        self.connections_in_use: dict[Connection, int] = {}
         drone_id: int = 1
 
         while drone_id <= number_of_drones:
@@ -509,26 +523,22 @@ class Simulation:
     def __repr__(self) -> str:
         return "\n".join(str(drone) for drone in self.drones)
 
-    def run_route(self, route: list[Zone]) -> None:
+    def run_route(self, routes: list[list[Zone]]) -> None:
         """
         Hace que todos los drones de la simulación sigan una ruta.
         """
+        if len(routes) != len(self.drones):
+            raise ValueError(
+                "Number of routes match number of drones"
+            )
 
-        if not isinstance(route, list):
-            raise TypeError("Route must be a list")
-
-        if not route:
-            raise ValueError("Route cannot be empty")
-
-        for drone in self.drones:
+        for drone, route in zip(self.drones, routes):
             drone.follow_route(route)
 
-    def run_turn(self, route: list[Zone]) -> None:
+    def run_turn(self) -> None:
         """
         Hace avanzar un paso a todos los drones(por turnos).
         """
-
-        connections_in_use: dict[Connection, int] = {}
 
         planned_moves: list[tuple[Drone, Zone]] = []
 
@@ -536,7 +546,34 @@ class Simulation:
             if drone.finished:
                 continue
 
-            next_zone = drone.get_next_zone(route)
+            if drone.in_transit:
+                drone.transit_turns_remaining -= 1
+
+                if drone.transit_turns_remaining == 0:
+                    if drone.transit_destination is None:
+                        raise ValueError(
+                            "Drone is in transit without a destination"
+                        )
+                    connection = drone.transit_connection
+
+                    drone.move_to(drone.transit_destination)
+                    drone.route_position += 1
+                    drone.in_transit = False
+                    drone.transit_destination = None
+                    drone.transit_connection = None
+
+                    if connection is not None:
+                        self.connections_in_use[connection] -= 1
+
+                        if self.connections_in_use[connection] == 0:
+                            del self.connections_in_use[connection]
+                    print(
+                        f"Drone {drone.drone_id} "
+                        f"moved to {drone.current_zone.name}"
+                    )
+                continue
+
+            next_zone = drone.get_next_zone()
 
             if next_zone is None:
                 drone.finish()
@@ -547,13 +584,6 @@ class Simulation:
                 continue
 
             planned_moves.append((drone, next_zone))
-
-        planned_entries: dict[Zone, int] = {}
-
-        for drone, next_zone in planned_moves:
-            planned_entries[next_zone] = (
-                planned_entries.get(next_zone, 0) + 1
-            )
 
         planned_exits: dict[Zone, int] = {}
 
@@ -570,9 +600,12 @@ class Simulation:
             current_count = self.count_drones_in_zone(next_zone)
             leaving_count = planned_exits.get(next_zone, 0)
 
-            available_space = (
-                next_zone.max_drones - current_count + leaving_count
-            )
+            if next_zone.max_drones is None:
+                available_space = 1
+            else:
+                available_space = (
+                    next_zone.max_drones - current_count + leaving_count
+                )
 
             if available_space <= 0:
                 print(
@@ -584,7 +617,7 @@ class Simulation:
             if not self.can_use_connection(
                 current_zone,
                 next_zone,
-                connections_in_use
+                self.connections_in_use
             ):
                 print(
                     f"Drone {drone.drone_id} "
@@ -594,43 +627,19 @@ class Simulation:
                 continue
 
             connection = self.map.get_connection(current_zone, next_zone)
-            drone.move_one_step(next_zone)
 
-            if connection is not None:
-                connections_in_use[connection] = (
-                    connections_in_use.get(connection, 0) + 1
-                )
+            if next_zone.zone_type == "restricted":
+                drone.start_transit(next_zone, connection)
 
-            # if self.can_enter_zone(next_zone):
-            #     if self.can_use_connection(
-            #         drone.current_zone,
-            #         next_zone,
-            #         connections_in_use
-            #     ):
-            #         connection = self.map.get_connection(
-            #             drone.current_zone,
-            #             next_zone
-            #         )
+                if connection is not None:
+                    self.connections_in_use[connection] = (
+                        self.connections_in_use.get(connection, 0) + 1
+                    )
 
-            #         drone.move_one_step(next_zone)
+            else:
+                drone.move_one_step(next_zone)
 
-            #         if connection is not None:
-            #             connections_in_use[connection] = (
-            #                 connections_in_use.get(connection, 0) + 1
-            #             )
-            #     else:
-            #         print(
-            #             f"Drone {drone.drone_id} "
-            #             f"cannot use connection to {next_zone.name}: "
-            #             "connection is full"
-            #         )
-            # else:
-                print(
-                    f"Drone {drone.drone_id} "
-                    f"cannot enter {next_zone.name}: zone is full"
-                )
-
-    def run_simulation(self, route: list[Zone]) -> None:
+    def run_simulation(self) -> None:
         """
         Ejecuta la simulación hasta completar la ruta.
         """
@@ -639,7 +648,7 @@ class Simulation:
         while not self.all_drones_finished():
             turn += 1
             print(f"\n--- Turn {turn} ---")
-            self.run_turn(route)
+            self.run_turn()
 
     def count_drones_in_zone(self, zone: Zone) -> int:
         """
@@ -662,6 +671,9 @@ class Simulation:
             raise ValueError("Zone must be a Zone")
 
         count_drones = self.count_drones_in_zone(zone)
+
+        if zone.max_drones is None:
+            return True
 
         if count_drones < zone.max_drones:
             return True
@@ -898,7 +910,8 @@ if __name__ == "__main__":
     print("Posiciones iniciales:")
     for drone in simulation.drones:
         print(drone.drone_id, drone.current_zone.name)
-    simulation.run_simulation(route)
+    simulation.run_route([route, route, route])
+    simulation.run_simulation()
     count_drones = simulation.count_drones_in_zone(goal)
     print("Posiciones finales:")
     for drone in simulation.drones:
@@ -1005,16 +1018,18 @@ if __name__ == "__main__":
 
     simulation = Simulation(1, zone_a, test_map)
     simulation.drones = [drone1, drone2]
+    drone1.follow_route(test_route_d1)
+    drone2.follow_route(test_route_d2)
 
     print("ANTES:")
     print("D1:", drone1.current_zone.name)
     print("D2:", drone2.current_zone.name)
 
     print("SIGUIENTES:")
-    print("D1:", drone1.get_next_zone(test_route_d1).name)
-    print("D2:", drone2.get_next_zone(test_route_d2).name)
+    print("D1:", drone1.get_next_zone().name)
+    print("D2:", drone2.get_next_zone().name)
 
-    simulation.run_turn(test_route_d1)
+    simulation.run_turn()
 
     print("DESPUÉS:")
     print("D1:", drone1.current_zone.name)

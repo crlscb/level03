@@ -1,9 +1,14 @@
 from parser import MapParser
-
+from models import Simulation
 
 def main() -> None:
     parser = MapParser("test_map.txt")
     map_data = parser.parse()
+    simulation = Simulation(
+        map_data.number_of_drones,
+        map_data.start_zone,
+        map_data.drone_map
+    )
 
     print(f"Drones: {map_data.number_of_drones}")
     print(f"Start: {map_data.start_zone}")
@@ -44,6 +49,9 @@ def main() -> None:
 
         movements_cost = map_data.drone_map.get_route_cost(route)
         print(f"Movement cost total: {movements_cost} turn(s)")
+
+        simulation.run_route([route] * map_data.number_of_drones)
+        simulation.run_simulation()
     except ValueError as e:
         print(f"Error: {e}")
 

@@ -130,7 +130,7 @@ class MapParser:
 
         zone_type: str = "normal"
         color: str | None = None
-        max_drones: int = 1
+        max_drones: int | None = None if ignore_max_drones else 1
         metadata: str = " ".join(parts[3:])
 
         if len(parts) > 3:

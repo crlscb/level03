@@ -1,4 +1,5 @@
 import heapq
+from utils import color_text
 
 """
 El mapa está formado por diferentes zonas por las que pueden pasar drones
@@ -566,8 +567,12 @@ class Simulation:
 
                         if self.connections_in_use[connection] == 0:
                             del self.connections_in_use[connection]
-                    print(
-                        f"D{drone.drone_id}-{drone.current_zone.name}"
+
+                    movements.append(
+                        color_text(
+                            f"D{drone.drone_id}-{drone.current_zone.name}",
+                            drone.current_zone.color
+                        )
                     )
                 continue
 
@@ -588,13 +593,6 @@ class Simulation:
         for drone, next_zone in planned_moves:
             current_zone = drone.current_zone
 
-            planned_exits[current_zone] = (
-                planned_exits.get(current_zone, 0) + 1
-            )
-
-        for drone, next_zone in planned_moves:
-            current_zone = drone.current_zone
-
             if not self.can_use_connection(
                 current_zone,
                 next_zone,
@@ -603,6 +601,10 @@ class Simulation:
                 continue
 
             possibles_moves.append((drone, next_zone))
+
+            planned_exits[current_zone] = (
+                planned_exits.get(current_zone, 0) + 1
+            )
 
             connection = self.map.get_connection(current_zone, next_zone)
 
@@ -642,8 +644,10 @@ class Simulation:
             if next_zone.zone_type == "restricted":
                 drone.start_transit(next_zone, connection)
                 movements.append(
-                    f"D{drone.drone_id}-{connection.zone_a.name}"
-                    f"-{connection.zone_b.name}"
+                    color_text(
+                        f"D{drone.drone_id}-{connection.zone_a.name}"
+                        f"-{connection.zone_b.name}", next_zone.color
+                    )
                 )
 
                 if connection is not None:
@@ -652,8 +656,13 @@ class Simulation:
                     )
             else:
                 drone.move_one_step(next_zone)
+                if drone.route_position == len(drone.route) - 1:
+                    drone.finish()
                 movements.append(
-                    f"D{drone.drone_id}-{next_zone.name}"
+                    color_text(
+                        f"D{drone.drone_id}-{next_zone.name}",
+                        next_zone.color
+                    )
                 )
         return movements
 

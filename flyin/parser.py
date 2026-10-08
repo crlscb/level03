@@ -30,50 +30,60 @@ class MapParser:
         with open(self.filename, "r", encoding="utf-8") as file:
             lines: list[str] = file.readlines()
 
-        clean_lines: list[str] = [
-            line.strip()
-            for line in lines
+        clean_lines: list[tuple[int, str]] = [
+            (number, line.strip())
+            for number, line in enumerate(lines, start=1)
             if line.strip() and not line.strip().startswith("#")
         ]
 
         if not clean_lines:
             raise ValueError("Map file is empty")
 
-        first_line: str = clean_lines[0]
-        self.parse_number_of_drones(first_line, map_data)
+        first_line_number, first_line = clean_lines[0]
+        try:
+            self.parse_number_of_drones(first_line, map_data)
+        except ValueError as e:
+            raise ValueError(
+                f"Error on line {first_line_number}: {e}"
+            )
 
-        for line in clean_lines[1:]:
-            if line.startswith("start_hub:"):
-                if map_data.start_zone is not None:
-                    raise ValueError("Multiple start_hub definitions")
+        for line_number, line in clean_lines[1:]:
+            try:
+                if line.startswith("start_hub:"):
+                    if map_data.start_zone is not None:
+                        raise ValueError("Multiple start_hub definitions")
 
-                start_data: str = line[len("start_hub:"):].strip()
-                start_zone: Zone = self.parse_zone_data(
-                    start_data,
-                    ignore_max_drones=True
-                )
-                map_data.start_zone = start_zone
-                map_data.drone_map.add_zone(start_zone)
-            elif line.startswith("end_hub:"):
-                if map_data.end_zone is not None:
-                    raise ValueError("Multiple end_hub definitions")
+                    start_data: str = line[len("start_hub:"):].strip()
+                    start_zone: Zone = self.parse_zone_data(
+                        start_data,
+                        ignore_max_drones=True
+                    )
+                    map_data.start_zone = start_zone
+                    map_data.drone_map.add_zone(start_zone)
+                elif line.startswith("end_hub:"):
+                    if map_data.end_zone is not None:
+                        raise ValueError("Multiple end_hub definitions")
 
-                end_data: str = line[len("end_hub:"):].strip()
-                end_zone: Zone = self.parse_zone_data(
-                    end_data,
-                    ignore_max_drones=True
-                )
-                map_data.end_zone = end_zone
-                map_data.drone_map.add_zone(end_zone)
-            elif line.startswith("hub:"):
-                hub_data: str = line[len("hub:"):].strip()
-                hub_zone: Zone = self.parse_zone_data(hub_data)
-                map_data.drone_map.add_zone(hub_zone)
-            elif line.startswith("connection:"):
-                connection_data: str = line[len("connection:"):].strip()
-                self.parse_connection_data(connection_data, map_data)
-            else:
-                raise ValueError(f"Unknown line: {line}")
+                    end_data: str = line[len("end_hub:"):].strip()
+                    end_zone: Zone = self.parse_zone_data(
+                        end_data,
+                        ignore_max_drones=True
+                    )
+                    map_data.end_zone = end_zone
+                    map_data.drone_map.add_zone(end_zone)
+                elif line.startswith("hub:"):
+                    hub_data: str = line[len("hub:"):].strip()
+                    hub_zone: Zone = self.parse_zone_data(hub_data)
+                    map_data.drone_map.add_zone(hub_zone)
+                elif line.startswith("connection:"):
+                    connection_data: str = line[len("connection:"):].strip()
+                    self.parse_connection_data(connection_data, map_data)
+                else:
+                    raise ValueError(f"Unknown line: {line}")
+            except ValueError as e:
+                raise ValueError(
+                    f"Error on line {line_number}: {e}"
+                ) from e
 
         if map_data.start_zone is None:
             raise ValueError("Missing start_hub")

@@ -1,6 +1,7 @@
 from parser import MapParser
 from models import Simulation
 
+
 def main() -> None:
     parser = MapParser("test_map.txt")
     map_data = parser.parse()
@@ -57,4 +58,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as e:
+        print(e)

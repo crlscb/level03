@@ -464,7 +464,6 @@ class Drone:
         """
         self.move_to(destination)
         self.route_position += 1
-        print(f"Drone {self.drone_id} moved to {destination.name}")
 
     def get_next_zone(self) -> Zone | None:
         """
@@ -535,11 +534,11 @@ class Simulation:
         for drone, route in zip(self.drones, routes):
             drone.follow_route(route)
 
-    def run_turn(self) -> None:
+    def run_turn(self) -> list[str]:
         """
         Hace avanzar un paso a todos los drones(por turnos).
         """
-
+        movements: list[str] = []
         planned_moves: list[tuple[Drone, Zone]] = []
 
         for drone in self.drones:
@@ -568,8 +567,7 @@ class Simulation:
                         if self.connections_in_use[connection] == 0:
                             del self.connections_in_use[connection]
                     print(
-                        f"Drone {drone.drone_id} "
-                        f"moved to {drone.current_zone.name}"
+                        f"D{drone.drone_id}-{drone.current_zone.name}"
                     )
                 continue
 
@@ -577,10 +575,6 @@ class Simulation:
 
             if next_zone is None:
                 drone.finish()
-                print(
-                    f"Drone {drone.drone_id} "
-                    "has reached the end of the route"
-                )
                 continue
 
             planned_moves.append((drone, next_zone))
@@ -594,16 +588,18 @@ class Simulation:
         for drone, next_zone in planned_moves:
             current_zone = drone.current_zone
 
+            planned_exits[current_zone] = (
+                planned_exits.get(current_zone, 0) + 1
+            )
+
+        for drone, next_zone in planned_moves:
+            current_zone = drone.current_zone
+
             if not self.can_use_connection(
                 current_zone,
                 next_zone,
                 planned_connections
             ):
-                print(
-                    f"Drone {drone.drone_id} "
-                    f"cannot use connection to {next_zone.name}: "
-                    "connection is full"
-                )
                 continue
 
             possibles_moves.append((drone, next_zone))
@@ -615,14 +611,8 @@ class Simulation:
                     planned_connections.get(connection, 0) + 1
                 )
 
-        for drone, next_zone in possibles_moves:
-            current_zone = drone.current_zone
-
-            planned_exits[current_zone] = (
-                planned_exits.get(current_zone, 0) + 1
-            )
-
         valid_moves: list[tuple[Drone, Zone]] = []
+        planned_entries: dict[Zone, int] = {}
 
         for drone, next_zone in possibles_moves:
             current_count = self.count_drones_in_zone(next_zone)
@@ -632,16 +622,16 @@ class Simulation:
                 available_space = (
                     next_zone.max_drones - current_count 
                     + planned_exits.get(next_zone, 0)
+                    - planned_entries.get(next_zone, 0)
                 )
 
             if available_space <= 0:
-                print(
-                    f"Drone {drone.drone_id} "
-                    f"cannot enter {next_zone.name}: zone is full"
-                )
                 continue
 
             valid_moves.append((drone, next_zone))
+            planned_entries[next_zone] = (
+                planned_entries.get(next_zone, 0) + 1
+            )
 
         for drone, next_zone in valid_moves:
             current_zone = drone.current_zone
@@ -651,6 +641,10 @@ class Simulation:
 
             if next_zone.zone_type == "restricted":
                 drone.start_transit(next_zone, connection)
+                movements.append(
+                    f"D{drone.drone_id}-{connection.zone_a.name}"
+                    f"-{connection.zone_b.name}"
+                )
 
                 if connection is not None:
                     self.connections_in_use[connection] = (
@@ -658,6 +652,10 @@ class Simulation:
                     )
             else:
                 drone.move_one_step(next_zone)
+                movements.append(
+                    f"D{drone.drone_id}-{next_zone.name}"
+                )
+        return movements
 
     def run_simulation(self) -> None:
         """
@@ -667,8 +665,9 @@ class Simulation:
 
         while not self.all_drones_finished():
             turn += 1
-            print(f"\n--- Turn {turn} ---")
-            self.run_turn()
+            movements = self.run_turn()
+            if movements:
+                print(" ".join(movements))
 
     def count_drones_in_zone(self, zone: Zone) -> int:
         """

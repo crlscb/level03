@@ -586,25 +586,52 @@ class Simulation:
             planned_moves.append((drone, next_zone))
 
         planned_exits: dict[Zone, int] = {}
+        possibles_moves: list[tuple[Drone, Zone]] = []
+        planned_connections: dict[Connection, int] = (
+            self.connections_in_use.copy()
+        )
 
         for drone, next_zone in planned_moves:
+            current_zone = drone.current_zone
+
+            if not self.can_use_connection(
+                current_zone,
+                next_zone,
+                planned_connections
+            ):
+                print(
+                    f"Drone {drone.drone_id} "
+                    f"cannot use connection to {next_zone.name}: "
+                    "connection is full"
+                )
+                continue
+
+            possibles_moves.append((drone, next_zone))
+
+            connection = self.map.get_connection(current_zone, next_zone)
+
+            if connection is not None:
+                planned_connections[connection] = (
+                    planned_connections.get(connection, 0) + 1
+                )
+
+        for drone, next_zone in possibles_moves:
             current_zone = drone.current_zone
 
             planned_exits[current_zone] = (
                 planned_exits.get(current_zone, 0) + 1
             )
 
-        for drone, next_zone in planned_moves:
-            current_zone = drone.current_zone
+        valid_moves: list[tuple[Drone, Zone]] = []
 
+        for drone, next_zone in possibles_moves:
             current_count = self.count_drones_in_zone(next_zone)
-            leaving_count = planned_exits.get(next_zone, 0)
-
             if next_zone.max_drones is None:
                 available_space = 1
             else:
                 available_space = (
-                    next_zone.max_drones - current_count + leaving_count
+                    next_zone.max_drones - current_count 
+                    + planned_exits.get(next_zone, 0)
                 )
 
             if available_space <= 0:
@@ -614,19 +641,13 @@ class Simulation:
                 )
                 continue
 
-            if not self.can_use_connection(
-                current_zone,
-                next_zone,
-                self.connections_in_use
-            ):
-                print(
-                    f"Drone {drone.drone_id} "
-                    f"cannot use connection to {next_zone.name}: "
-                    "connection is full"
-                )
-                continue
+            valid_moves.append((drone, next_zone))
 
-            connection = self.map.get_connection(current_zone, next_zone)
+        for drone, next_zone in valid_moves:
+            current_zone = drone.current_zone
+            connection = self.map.get_connection(
+                current_zone, next_zone
+            )
 
             if next_zone.zone_type == "restricted":
                 drone.start_transit(next_zone, connection)
@@ -635,7 +656,6 @@ class Simulation:
                     self.connections_in_use[connection] = (
                         self.connections_in_use.get(connection, 0) + 1
                     )
-
             else:
                 drone.move_one_step(next_zone)
 

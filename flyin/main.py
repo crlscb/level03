@@ -1,6 +1,6 @@
 from parser import MapParser
 from models import Simulation
-
+from display import draw_map
 
 def main() -> None:
     parser = MapParser("test_map.txt")
@@ -52,7 +52,19 @@ def main() -> None:
         print(f"Movement cost total: {movements_cost} turn(s)")
 
         simulation.run_route([route] * map_data.number_of_drones)
-        simulation.run_simulation()
+
+        turn = 0
+
+        while not simulation.all_drones_finished():
+            print("\33[2J\33[H", end="")
+            turn += 1
+
+            movements = simulation.run_turn()
+
+            draw_map(simulation, turn)
+            if movements:
+                print(" ".join(movements))
+
     except ValueError as e:
         print(f"Error: {e}")
 

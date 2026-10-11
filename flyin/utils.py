@@ -6,7 +6,8 @@ def color_text(text: str, color: str) -> str:
         "blue": "\033[94m",
         "magenta": "\033[95m",
         "cyan": "\033[96m",
-        "white": "\033[97m"
+        "white": "\033[97m",
+        "orange": "\033[38;5;208m"
     }
 
     reset = "\033[0m"

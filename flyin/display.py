@@ -1,9 +1,18 @@
-from rich.console import Console, Group
+from rich.console import Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
+from rich.align import Align
+from rich.progress_bar import ProgressBar
 from pyfiglet import Figlet
 from models import Simulation
+
+
+def get_zone_color(color: str | None) -> str:
+    if color is None:
+        return "white"
+
+    return {"orange": "dark_orange"}.get(color, color)
 
 
 def draw_map(
@@ -15,33 +24,50 @@ def draw_map(
 
     # Header
     figlet = Figlet(font="small_shadow")
-    title_text = Text(
-        figlet.renderText("FLY-IN").rstrip(),
-        style="bold white",
-        justify="center"
-    )
 
     title_panel = Panel(
-        title_text,
+        Align.center(
+            Text(figlet.renderText("FLY-IN").rstrip("\n"), style="bold white")
+        ),
         border_style="bright_blue",
         padding=(0, 0)
     )
 
-    info = Text()
-    info.append("Drone Routing Simulation", style="bold bright_white")
-    info.append(f"    TURN: {turn}", style="bold cyan")
-    info.append(f"    DRONES: {len(simulation.drones)}", style="bold cyan")
-    info.append(
-        f"    STATUS: {status}",
-        style="bold green" if status == "RUNNING" else "bold yellow"
+    finished = sum(1 for d in simulation.drones if d.finished)
+    total = len(simulation.drones)
+
+    header = Table.grid(expand=True, padding=(0, 1))
+    header.add_column(ratio=1)
+    header.add_column(justify="right")
+    header.add_row(
+        Text.assemble(
+            ("Drone Routing Simulation", "bold bright_white"),
+            (f"    TURN {turn}", "bold cyan"),
+            (f"    DRONES {total}", "bold cyan"),
+        ),
+        Text("DELIVERED   ", style="bold_ cyan"),
+        ProgressBar(
+            total=total,
+            completed=finished,
+            width=18,
+            style="grey23",
+            complete_style="green",
+            finished_style="green"
+        ),
+        Text.assemble(
+            (f"{finished}/{total}   ", "bold white"),
+            (
+                f"● {status}", "bold green"
+                if status == "RUNNING" else "bold yellow"
+            )
+        ),
     )
 
     header_panel = Panel(
-        info,
+        header,
         border_style="bright_blue",
         padding=(0, 1)
     )
-
 
     # Controls
     controls = Text()
@@ -106,9 +132,7 @@ def draw_map(
             if drone.current_zone == zone
         ]
 
-        zone_color = {
-            "orange": "dark_orange"
-        }.get(zone.color, zone.color or "white")
+        zone_color = get_zone_color(zone.color)
         zone_name = Text(zone.name, style=zone_color)
 
         drone_text = Text(
@@ -149,13 +173,8 @@ def draw_map(
                 style="dim"
             )
 
-        zone_a_color = {
-            "orange": "dark_orange"
-        }.get(connection.zone_a.color, connection.zone_a.color or "white")
-
-        zone_b_color = {
-            "orange": "dark_orange"
-        }.get(connection.zone_b.color, connection.zone_b.color or "white")
+        zone_a_color = get_zone_color(connection.zone_a.color)
+        zone_b_color = get_zone_color(connection.zone_b.color)
 
         zone_a_name = Text(
             connection.zone_a.name,
@@ -179,7 +198,6 @@ def draw_map(
         border_style="bright_blue"
     )
 
-   
     # Recent movements
     history_text = Text(
         no_wrap=False,
@@ -194,7 +212,6 @@ def draw_map(
     else:
         history_text.append("Waiting for first movement...", style="dim")
 
-    
     history_panel = Panel(
         history_text,
         title="LAST MOVEMENTS",
@@ -202,7 +219,6 @@ def draw_map(
         padding=(0, 1),
         expand=True
     )
-
 
     # Dashboard layout
     middle = Table.grid(expand=True, padding=(0, 0))

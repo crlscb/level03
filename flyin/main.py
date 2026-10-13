@@ -21,6 +21,10 @@ def main() -> None:
     """Run the drone simulation."""
     parser = MapParser("maps/medium/02_circular_loop.txt")
     map_data = parser.parse()
+    if map_data.start_zone is None or map_data.end_zone is None:
+        raise ValueError(
+            "The start or end zone does not exist in the map."
+        )
 
     try:
         route = map_data.drone_map.find_route(
@@ -144,14 +148,15 @@ def main() -> None:
                                 live.update(
                                     Group(
                                         draw_map(
-                                            Simulation,
+                                            simulation,
                                             turn,
                                             history,
                                             status="COMPLETED"
                                         ),
                                         Panel(
                                             "Simulation completed! :) "
-                                            "Press 'q' to quit, 'i' for informartion "
+                                            "Press 'q' to quit, 'i' "
+                                            "for informartion "
                                             "or 'r' to restart.",
                                             style=GREEN_LIGHT,
                                             border_style=GREEN_LIGHT,
@@ -269,6 +274,7 @@ def main() -> None:
 
     except ValueError as error:
         console.print(f"[bold red]Error:[/] {error}")
+
 
 if __name__ == "__main__":
     try:

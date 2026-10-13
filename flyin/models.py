@@ -622,7 +622,7 @@ class Simulation:
                 available_space = 1
             else:
                 available_space = (
-                    next_zone.max_drones - current_count 
+                    next_zone.max_drones - current_count
                     + planned_exits.get(next_zone, 0)
                     - planned_entries.get(next_zone, 0)
                 )
@@ -640,6 +640,8 @@ class Simulation:
             connection = self.map.get_connection(
                 current_zone, next_zone
             )
+            if connection is None:
+                continue
 
             if next_zone.zone_type == "restricted":
                 drone.start_transit(next_zone, connection)
@@ -732,4 +734,3 @@ class Simulation:
         current_usage = connections_in_use.get(connection, 0)
 
         return current_usage < connection.max_link_capacity
-

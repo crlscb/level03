@@ -1,4 +1,4 @@
-def color_text(text: str, color: str) -> str:
+def color_text(text: str, color: str | None) -> str:
     colors = {
         "red": "\033[91m",
         "green": "\033[92m",

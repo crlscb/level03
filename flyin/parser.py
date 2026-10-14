@@ -201,7 +201,7 @@ class MapParser:
         """
         parts: list[str] = data.split()
 
-        if len(parts) < 1:
+        if not parts:
             raise ValueError("Invalid connection format")
 
         connection_data: str = parts[0]

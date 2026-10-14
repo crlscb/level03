@@ -4,8 +4,10 @@ from rich.panel import Panel
 from parser import MapParser
 from models import Simulation
 from display import draw_map
+from pathlib import Path
 import readchar
 import time
+import sys
 
 GREEN_LIGHT = "#87F160"
 
@@ -19,27 +21,43 @@ def read_key() -> str:
 
 def main() -> None:
     """Run the drone simulation."""
-    parser = MapParser("maps/medium/02_circular_loop.txt")
+    map_path = "test_map.txt"
+
+    if "--subject" in sys.argv:
+        subject_index = sys.argv.index("--subject")
+        if subject_index + 1 < len(sys.argv):
+            map_path = sys.argv[subject_index + 1]
+
+    parser = MapParser(str(Path(map_path)))
     map_data = parser.parse()
+
     if map_data.start_zone is None or map_data.end_zone is None:
         raise ValueError(
             "The start or end zone does not exist in the map."
         )
 
     try:
-        route = map_data.drone_map.find_route(
+        routes = map_data.drone_map.find_alternative_routes(
             map_data.start_zone,
             map_data.end_zone
         )
 
+        route = routes[0]
         movements_cost = map_data.drone_map.get_route_cost(route)
 
+        assigned_routes = [
+            routes[i % len(routes)]
+            for i in range(map_data.number_of_drones)
+        ]
         simulation = Simulation(
             map_data.number_of_drones,
             map_data.start_zone,
             map_data.drone_map
         )
-        simulation.run_route([route] * map_data.number_of_drones)
+        simulation.run_route(assigned_routes)
+        if "--subject" in sys.argv:
+            simulation.run_simulation()
+            return
 
         turn = 0
         history: list[str] = []
@@ -171,9 +189,7 @@ def main() -> None:
                             map_data.start_zone,
                             map_data.drone_map
                         )
-                        simulation.run_route(
-                            [route] * map_data.number_of_drones
-                        )
+                        simulation.run_route(assigned_routes)
                         turn = 0
                         history.clear()
                         auto_mode = False
@@ -232,9 +248,7 @@ def main() -> None:
                         map_data.start_zone,
                         map_data.drone_map
                     )
-                    simulation.run_route(
-                        [route] * map_data.number_of_drones
-                    )
+                    simulation.run_route(assigned_routes)
                     turn = 0
                     history.clear()
                     auto_mode = False

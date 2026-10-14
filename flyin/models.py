@@ -1,9 +1,6 @@
 import heapq
+import re
 from utils import color_text
-
-"""
-El mapa está formado por diferentes zonas por las que pueden pasar drones
-"""
 
 
 class Zone:
@@ -321,6 +318,47 @@ class Map:
 
         return route
 
+    def find_alternative_routes(
+    self,
+    start: Zone,
+    goal: Zone,
+    max_routes: int = 5,
+    ) -> list[list[Zone]]:
+        """Find alternative valid routes ordered by movement cost."""
+        if max_routes < 1:
+            raise ValueError("max_routes must be at least 1")
+
+        routes: list[list[Zone]] = []
+        pending: list[tuple[int, int, list[Zone]]] = []
+        counter = 0
+
+        heapq.heappush(pending, (0, counter, [start]))
+
+        while pending and len(routes) < max_routes:
+            cost, _, route = heapq.heappop(pending)
+            current = route[-1]
+
+            if current == goal:
+                routes.append(route)
+                continue
+
+            for neighbor in self.get_neighbors(current):
+                if neighbor.zone_type == "blocked" or neighbor in route:
+                    continue
+
+                new_cost = cost + self.get_movement_cost(neighbor)
+                counter += 1
+
+                heapq.heappush(
+                    pending,
+                    (new_cost, counter, route + [neighbor]),
+                )
+
+        if not routes:
+            raise ValueError("No route found between start and goal")
+
+        return routes
+
     def get_movement_cost(self, zone: Zone) -> int:
         """
         Devuelve el coste de movimiento hacia una zona.
@@ -513,6 +551,7 @@ class Simulation:
         self.map = drone_map
         self.drones: list[Drone] = []
         self.connections_in_use: dict[Connection, int] = {}
+        self.zone_arrival_reservations: dict[Zone, int] = {}
         drone_id: int = 1
 
         while drone_id <= number_of_drones:
@@ -536,10 +575,9 @@ class Simulation:
             drone.follow_route(route)
 
     def run_turn(self) -> list[str]:
-        """
-        Hace avanzar un paso a todos los drones(por turnos).
-        """
+        """Planifica y ejecuta los movimientos de un turno."""
         movements: list[str] = []
+        arrivals: list[tuple[Drone, Zone, Connection]] = []
         planned_moves: list[tuple[Drone, Zone]] = []
 
         for drone in self.drones:
@@ -549,31 +587,20 @@ class Simulation:
             if drone.in_transit:
                 drone.transit_turns_remaining -= 1
 
+                if drone.transit_turns_remaining < 0:
+                    raise ValueError("Invalid transit duration")
+
                 if drone.transit_turns_remaining == 0:
-                    if drone.transit_destination is None:
-                        raise ValueError(
-                            "Drone is in transit without a destination"
-                        )
+                    destination = drone.transit_destination
                     connection = drone.transit_connection
 
-                    drone.move_to(drone.transit_destination)
-                    drone.route_position += 1
-                    drone.in_transit = False
-                    drone.transit_destination = None
-                    drone.transit_connection = None
-
-                    if connection is not None:
-                        self.connections_in_use[connection] -= 1
-
-                        if self.connections_in_use[connection] == 0:
-                            del self.connections_in_use[connection]
-
-                    movements.append(
-                        color_text(
-                            f"D{drone.drone_id}-{drone.current_zone.name}",
-                            drone.current_zone.color
+                    if destination is None or connection is None:
+                        raise ValueError(
+                            "Drone is in transit without destination "
+                            "or connection"
                         )
-                    )
+
+                    arrivals.append((drone, destination, connection))
                 continue
 
             next_zone = drone.get_next_zone()
@@ -584,101 +611,210 @@ class Simulation:
 
             planned_moves.append((drone, next_zone))
 
-        planned_exits: dict[Zone, int] = {}
-        possibles_moves: list[tuple[Drone, Zone]] = []
-        planned_connections: dict[Connection, int] = (
-            self.connections_in_use.copy()
-        )
+        planned_connections = self.connections_in_use.copy()
+
+        for _, _, connection in arrivals:
+            planned_connections[connection] -= 1
+
+            if planned_connections[connection] <= 0:
+                del planned_connections[connection]
+
+        possible_moves: list[tuple[Drone, Zone]] = []
 
         for drone, next_zone in planned_moves:
-            current_zone = drone.current_zone
-
-            if not self.can_use_connection(
-                current_zone,
+            if self.can_use_connection(
+                drone.current_zone,
                 next_zone,
-                planned_connections
+                planned_connections,
             ):
-                continue
+                possible_moves.append((drone, next_zone))
 
-            possibles_moves.append((drone, next_zone))
-
-            planned_exits[current_zone] = (
-                planned_exits.get(current_zone, 0) + 1
-            )
-
-            connection = self.map.get_connection(current_zone, next_zone)
-
-            if connection is not None:
-                planned_connections[connection] = (
-                    planned_connections.get(connection, 0) + 1
-                )
-
-        valid_moves: list[tuple[Drone, Zone]] = []
-        planned_entries: dict[Zone, int] = {}
-
-        for drone, next_zone in possibles_moves:
-            current_count = self.count_drones_in_zone(next_zone)
-            if next_zone.max_drones is None:
-                available_space = 1
-            else:
-                available_space = (
-                    next_zone.max_drones - current_count
-                    + planned_exits.get(next_zone, 0)
-                    - planned_entries.get(next_zone, 0)
-                )
-
-            if available_space <= 0:
-                continue
-
-            valid_moves.append((drone, next_zone))
-            planned_entries[next_zone] = (
-                planned_entries.get(next_zone, 0) + 1
-            )
-
-        for drone, next_zone in valid_moves:
-            current_zone = drone.current_zone
-            connection = self.map.get_connection(
-                current_zone, next_zone
-            )
-            if connection is None:
-                continue
-
-            if next_zone.zone_type == "restricted":
-                drone.start_transit(next_zone, connection)
-                movements.append(
-                    color_text(
-                        f"D{drone.drone_id}-{connection.zone_a.name}"
-                        f"-{connection.zone_b.name}", next_zone.color
-                    )
+                connection = self.map.get_connection(
+                    drone.current_zone, next_zone
                 )
 
                 if connection is not None:
-                    self.connections_in_use[connection] = (
-                        self.connections_in_use.get(connection, 0) + 1
+                    planned_connections[connection] = (
+                        planned_connections.get(connection, 0) + 1
                     )
-            else:
-                drone.move_one_step(next_zone)
-                if drone.route_position == len(drone.route) - 1:
-                    drone.finish()
+
+        valid_moves = possible_moves.copy()
+
+        while True:
+            planned_exits: dict[Zone, int] = {}
+
+            for drone, _ in valid_moves:
+                zone = drone.current_zone
+                planned_exits[zone] = planned_exits.get(zone, 0) + 1
+
+            planned_entries: dict[Zone, int] = {}
+
+            for _, destination, _ in arrivals:
+                planned_entries[destination] = (
+                    planned_entries.get(destination, 0) + 1
+                )
+
+            confirmed_moves: list[tuple[Drone, Zone]] = []
+
+            for drone, destination in valid_moves:
+                capacity = destination.max_drones
+
+                if capacity is None:
+                    confirmed_moves.append((drone, destination))
+                    planned_entries[destination] = (
+                        planned_entries.get(destination, 0) + 1
+                    )
+                    continue
+
+                occupied = self.count_drones_in_zone(destination)
+                leaving = planned_exits.get(destination, 0)
+                entering = planned_entries.get(destination, 0)
+
+                available_space = capacity - occupied + leaving - entering
+
+                if available_space > 0:
+                    confirmed_moves.append((drone, destination))
+                    planned_entries[destination] = entering + 1
+
+            if confirmed_moves == valid_moves:
+                break
+
+            valid_moves = confirmed_moves
+
+        planned_exits = {}
+
+        for drone, _ in valid_moves:
+            zone = drone.current_zone
+            planned_exits[zone] = planned_exits.get(zone, 0) + 1
+
+        for zone in self.map.zones:
+            if zone.max_drones is None:
+                continue
+
+            arriving = sum(
+                1 for _, destination, _ in arrivals
+                if destination == zone
+            )
+
+            entering = sum(
+                1 for _, destination in valid_moves
+                if destination == zone
+                and destination.zone_type != "restricted"
+            )
+
+            occupied = self.count_drones_in_zone(zone)
+            leaving = planned_exits.get(zone, 0)
+
+            if occupied - leaving + arriving + entering > zone.max_drones:
+                raise ValueError(
+                    f"Mandatory transit arrival exceeds capacity "
+                    f"at zone {zone.name}"
+                )
+
+        for drone, destination, connection in arrivals:
+            reserved = self.zone_arrival_reservations.get(destination, 0)
+            if reserved > 0:
+                if reserved == 1:
+                    del self.zone_arrival_reservations[destination]
+                else:
+                    self.zone_arrival_reservations[destination] = reserved - 1
+            drone.move_to(destination)
+            drone.route_position += 1
+            drone.in_transit = False
+            drone.transit_destination = None
+            drone.transit_connection = None
+            drone.transit_turns_remaining = 0
+
+            self.connections_in_use[connection] -= 1
+
+            if self.connections_in_use[connection] == 0:
+                del self.connections_in_use[connection]
+
+            if drone.route_position == len(drone.route) - 1:
+                drone.finish()
+
+            movements.append(
+                color_text(
+                    f"D{drone.drone_id}-{destination.name}",
+                    destination.color,
+                )
+            )
+
+        for drone, destination in valid_moves:
+            connection = self.map.get_connection(
+                drone.current_zone, destination
+            )
+
+            if connection is None:
+                continue
+
+            if destination.zone_type == "restricted":
+                drone.start_transit(destination, connection)
+
+                self.connections_in_use[connection] = (
+                    self.connections_in_use.get(connection, 0) + 1
+                )
+
+                self.zone_arrival_reservations[destination] = (
+                    self.zone_arrival_reservations.get(destination, 0) + 1
+                )
+
                 movements.append(
                     color_text(
-                        f"D{drone.drone_id}-{next_zone.name}",
-                        next_zone.color
+                        f"D{drone.drone_id}-"
+                        f"{connection.zone_a.name}-"
+                        f"{connection.zone_b.name}",
+                        destination.color,
                     )
                 )
+            else:
+                drone.move_one_step(destination)
+
+                if drone.route_position == len(drone.route) - 1:
+                    drone.finish()
+
+                movements.append(
+                    color_text(
+                        f"D{drone.drone_id}-{destination.name}",
+                        destination.color,
+                    )
+                )
+
         return movements
+
+    def has_drones_in_transit(self) -> bool:
+        """Comprueba si hay drones que deben completar un tránsito."""
+        return any(drone.in_transit for drone in self.drones)
 
     def run_simulation(self) -> None:
         """
         Ejecuta la simulación hasta completar la ruta.
         """
         turn = 0
+        consecutives_turns = 0
 
         while not self.all_drones_finished():
             turn += 1
             movements = self.run_turn()
-            if movements:
-                print(" ".join(movements))
+            self.validate_capacities()
+
+            if not movements:
+                if self.has_drones_in_transit():
+                    consecutives_turns = 0
+                    continue
+
+                consecutives_turns += 1
+                if consecutives_turns >= 2:
+                    raise RuntimeError(
+                        "Simulation in stuck: no drones can move."
+                    )
+                continue
+            consecutives_turns = 0
+            clean_movements = [
+                re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", movement)
+                for movement in movements
+            ]
+            print(" ".join(clean_movements))
 
     def count_drones_in_zone(self, zone: Zone) -> int:
         """
@@ -689,9 +825,33 @@ class Simulation:
         count = 0
 
         for drone in self.drones:
-            if drone.current_zone == zone:
+            if drone.current_zone == zone and not drone.in_transit:
                 count += 1
         return count
+
+    def validate_capacities(self) -> None:
+        """
+        Comprueba que las zonas y conexiones respetan sus capacidades.
+        """
+        for zone in self.map.zones:
+            if zone.max_drones is None:
+                continue
+
+            count = self.count_drones_in_zone(zone)
+
+            if count > zone.max_drones:
+                raise ValueError(
+                    f"Zone capacity exceeded: {zone.name} "
+                    f"({count}/{zone.max_drones})"
+                )
+
+        for connection, count in self.connections_in_use.items():
+            if count > connection.max_link_capacity:
+                raise ValueError(
+                    f"Connection capacity exceeded: "
+                    f"{connection.zone_a.name}-{connection.zone_b.name} "
+                    f"({count}/{connection.max_link_capacity})"
+                )
 
     def can_enter_zone(self, zone: Zone) -> bool:
         """

@@ -3,7 +3,7 @@ from rich.live import Live
 from rich.panel import Panel
 from parser import MapParser
 from models import Simulation
-from display import draw_map
+from display.display import draw_map
 from pathlib import Path
 import readchar
 import time

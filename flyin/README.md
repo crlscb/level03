@@ -201,16 +201,35 @@ The `--subject` mode provides a text output compatible with the movement format 
 
 ## Example Input and Output
 
-Using the example map defined in the Map Format section, the expected subject-compatible output is:
+The following example describes a map with one drone, a starting zone, an intermediate zone and a destination.
+
+**Input (`example.txt`):**
+
+```text
+nb_drones: 1
+
+start_hub: start 0 0 [color=green]
+end_hub: goal 2 0 [color=yellow]
+hub: mid 1 0 [zone=normal color=blue]
+
+connection: start-mid
+connection: mid-goal
+```
+
+**Run the simulation:**
+
+```bash
+python3 main.py --subject example.txt
+```
+
+**Expected output:**
 
 ```text
 D1-mid
 D1-goal
 ```
 
-Each output line represents one simulation turn. Movements are represented using the format `D<ID>-<destination>`. Drones that do not move during a turn are omitted.
-
-For restricted-zone movements, the output must also represent the drone's transit through the relevant connection according to the subject's output format.
+Each output line represents one simulation turn. Movements follow the format `D<ID>-<destination>`. Drones that do not move during a turn are omitted.
 
 ## Resources
 

@@ -1,6 +1,6 @@
 import heapq
 import re
-from utils import color_text
+from display.utils import color_text
 
 
 class Zone:
@@ -319,10 +319,10 @@ class Map:
         return route
 
     def find_alternative_routes(
-    self,
-    start: Zone,
-    goal: Zone,
-    max_routes: int = 5,
+        self,
+        start: Zone,
+        goal: Zone,
+        max_routes: int = 5,
     ) -> list[list[Zone]]:
         """Find alternative valid routes ordered by movement cost."""
         if max_routes < 1:

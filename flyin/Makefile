@@ -1,19 +1,25 @@
 PYTHON = python3
 PIP = $(PYTHON) -m pip
 
-.PHONY: install lint typecheck test clean
+.PHONY: install run debug lint typecheck test clean
 
 install:
 	$(PIP) install -r requirements.txt
 
+run:
+	$(PYTHON) main.py
+
+debug:
+	$(PYTHON) -m pdb main.py
+
 lint:
-	flake8 . --exclude .venv
+	$(PYTHON) -m flake8 . --exclude=.venv
 
 typecheck:
-	mypy . --strict --exclude .venv
+	$(PYTHON) -m mypy . --strict --exclude .venv
 
 test:
-	pytest
+	$(PYTHON) -m pytest -v
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
